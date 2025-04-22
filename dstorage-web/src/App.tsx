@@ -1,13 +1,19 @@
-import { Text, View } from "react-native";
-import 'react-native-url-polyfill/auto';
 
-import React, { useState, useEffect } from 'react';
+import reactLogo from './assets/react.svg'
+import viteLogo from '/vite.svg'
+import './App.css'
+
+import { Text, View } from "react-native";
+//import 'react-native-url-polyfill/auto';
+
 import Web3 from 'web3';
 import { AbiItem } from 'web3-utils';
 import { createHelia } from 'helia';
 import { unixfs } from '@helia/unixfs';
 //import { toString } from 'uint8arrays/to-string';
 //import { fromString } from 'uint8arrays/from-string';
+import React, { useEffect, useState } from 'react';
+
 
 declare let window: any; // MetaMask & Ethereum provider
 
