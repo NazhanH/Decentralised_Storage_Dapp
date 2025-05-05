@@ -1,43 +1,11 @@
 import './App.css'
 import React, { useEffect, useState } from 'react'
 import Web3 from 'web3'
-import { createHelia } from 'helia'
-import { unixfs } from '@helia/unixfs'
-import { createLibp2p } from 'libp2p'
-import {webSockets} from '@libp2p/websockets'
-import { tcp } from '@libp2p/tcp'
-import { mplex } from '@libp2p/mplex'
-import { noise } from '@chainsafe/libp2p-noise'
-import { bootstrap } from '@libp2p/bootstrap'
-import { MemoryDatastore } from 'datastore-core'
-
-import { create as createIPFSClient, IPFSHTTPClient } from 'ipfs-http-client'
-
+import { initIPFSEndpoint, getIPFSClient, getGatewayUrl, getEndpoint} from './ipfsClients'
 import { FILEVAULT_ABI } from './contracts/abi'
 import { CONTRACT_ADDRESS } from './contracts/address'
 
 declare let window: any
-
-// Create an IPFS client instance
-const ipfs: IPFSHTTPClient = createIPFSClient({url: 'http://192.168.0.135:5001/api/v0'})
-
-
-// // Build a Helia FS that peers with your local IPFS daemon
-// async function makeHeliaConnectedToLocalIPFS() {
-//   const localPeerMultiaddr = '/ip4/192.168.0.135/tcp/4001/2p/12D3KooWCbKg1gcqtMwUqhU78kyuP9QSTXuih35jk2KeZdhLWbzb'
-
-//   const libp2p = await createLibp2p({
-//     datastore: new MemoryDatastore(),
-//     transports: [webSockets()],
-//     streamMuxers: [mplex()],
-//     connectionEncrypters: [noise()],
-//     peerDiscovery: [bootstrap({ list: [localPeerMultiaddr] })],
-//   })
-
-//   const helia = await createHelia({ libp2p })
-//   console.log('Helia connected to local IPFS:', helia)
-//   return unixfs(helia)
-// }
 
 interface FileMeta {
   fileName: string
@@ -49,24 +17,24 @@ const App: React.FC = () => {
   const [userAddress, setUserAddress] = useState<string>('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<FileMeta[]>([])
-  // const [heliaFS, setHeliaFS] = useState<ReturnType<typeof unixfs> | null>(
-  //   null
-  // )
+  const [gatewayReady, setGatewayReady] = useState(false)
 
+
+  //init web3
   useEffect(() => {
     // a) Init Web3
     if (window.ethereum) {
       const w3 = new Web3(window.ethereum)
       setWeb3(w3)
 
-      // 1️⃣ Get currently-selected account (if already connected)
+      //Get currently-selected account (if already connected)
       window.ethereum
         .request({ method: 'eth_accounts' })
         .then((accounts: string[]) => {
           if (accounts.length) setUserAddress(accounts[0])
         })
 
-      // 2️⃣ Listen for account switches
+      //Listen for account switches
       const handleAccountsChanged = (accounts: string[] = []) => {
         setUserAddress(accounts[0] || '')
       }
@@ -81,6 +49,15 @@ const App: React.FC = () => {
     }
   }, [])
 
+  // init IPFS
+  useEffect(() => {
+    initIPFSEndpoint() .then(() => {
+      setGatewayReady(true) 
+    })
+  }, [])
+
+
+  // fetch files on load or change to web3 or userAddress
   useEffect(() => {
     if (web3 && userAddress) {
       fetchMyFiles()
@@ -88,38 +65,15 @@ const App: React.FC = () => {
   }, [web3, userAddress])
 
 
-  // useEffect(() => {
-  //   ;(async () => {
-  //     console.log('⏳ [Helia] initializing…')
-  //     try {
-  //       const fs = await makeHeliaConnectedToLocalIPFS()
-  //       console.log('✅ [Helia] fs ready:', fs)
-  //       setHeliaFS(fs)
-  //     } catch (err) {
-  //       console.error('❌ [Helia] init failed:', err)
-  //     }
-  //   })()
-  // }, [])
-  
-  /** 
- * Uploads the selected file to your local IPFS daemon
- * via HTTP and returns its CID.
- */
-  // const uploadToIPFSDaemon = async (): Promise<string> => {
-  //   if (!selectedFile) throw new Error('No file selected')
-    
-  //   // ipfs.add returns an object with a .cid property
-  //   const result = await ipfs.add(selectedFile)
-  //   console.log('✅ Uploaded to IPFS daemon, CID =', result.cid.toString())
-  //   return result.cid.toString()
-  // }
-
+  // upload file to IPFS
   async function uploadToIPFSDaemon(file: File): Promise<string> {
+    const ipfs = getIPFSClient()
     const result = await ipfs.add(file)
     console.log('✅ Added to IPFS daemon, CID =', result.cid.toString())
     return result.cid.toString()
   }
 
+  //connect to wallet
   const connectWallet = async () => {
     if (!window.ethereum) return alert('Please install MetaMask')
     try {
@@ -134,27 +88,22 @@ const App: React.FC = () => {
     }
   }
 
+  // handle file change
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) setSelectedFile(e.target.files[0])
   }
 
-  // const uploadToHelia = async (): Promise<string> => {
-  //   if (!selectedFile || !heliaFS) throw new Error('Helia not ready or no file')
-  //   const bytes = new Uint8Array(await selectedFile.arrayBuffer())
-  //   const cid = await heliaFS.addBytes(bytes)
-  //   console.log('Uploaded to Helia:', cid.toString())
-  //   return cid.toString()
-  // }
 
-  const uploadFileToBlockchain = async () => {
-    console.log('Uploading files to blockchain triggered')
+  // upload file to IPFS and then to smart contract
+  const uploadFileToIPFS = async () => {
+    console.log('Uploading files to IPFS triggered')
     console.log('selectedFile:', selectedFile)
     console.log('userAddress:', userAddress)
-    // console.log('heliaFS ready?', !!heliaFS)
+
     if (!web3 || !userAddress || !selectedFile ) return
     try {
       const cid = await uploadToIPFSDaemon(selectedFile)
-      console.log('Uploading to blockchain with CID:', cid)
+      console.log('Uploading to IPFS with CID:', cid)
       const contract = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
 
     // estimate gas first, to catch estimation errors
@@ -166,20 +115,21 @@ const App: React.FC = () => {
     const gasPrice = await web3.eth.getGasPrice();
     console.log('Gas price:', gasPrice);
 
+      // send transaction and data to smart contract
       await contract.methods
         .uploadFile(selectedFile.name, cid)
         .send({ from: userAddress, gas: gas.toString(), gasPrice: gasPrice.toString() });
-      console.log('File uploaded successfully:')
+      console.log('File upload successful')
       await fetchMyFiles()
     } catch (err:any) {
       console.error('❌ Upload error (full):', err);
-      //console.error('⛔️ call() revert reason:', callErr.message)
       console.error('err.message:', err.message);
       console.error('err.data:', err.data);
       console.error('err.stack:', err.stack);
     }
   }
 
+  // fetch detail of files from smart contract and fetch from ipfs
   const fetchMyFiles = async () => {
     if (!web3 || !userAddress) return
     const contract = new web3.eth.Contract(
@@ -204,16 +154,16 @@ const App: React.FC = () => {
           : 'Connect MetaMask'}
       </button>
 
-      <button  onClick={() => {
-            console.log('i am clicked');
-          }}>
-        click me
-      </button>
+      {gatewayReady ? (
+        <p style={{ color: 'green' }}>IPFS Gateway {getEndpoint().name} is ready</p>
+      ) : (
+        <p style={{ color: 'red' }}>IPFS Gateway is not ready</p>
+      )}
 
       <div style={{ marginTop: '1rem' }}>
         <input type="file" onChange={handleFileChange} />
         <button
-           onClick={() =>uploadFileToBlockchain()}
+           onClick={() =>uploadFileToIPFS()}
           disabled={!selectedFile || !userAddress}
         >
           Upload File
@@ -223,18 +173,55 @@ const App: React.FC = () => {
       <div style={{ marginTop: '2rem' }}>
         <h3>Uploaded Files</h3>
         <ul>
-          {uploadedFiles.map((file, i) => (
-            <li key={i}>
-              <strong>{file.fileName}</strong>{' '}
-              <a
-                href={`http://192.168.0.135:8080/ipfs/${file.cid}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                view
-              </a>
-            </li>
-          ))}
+          {uploadedFiles.map((file, i) => {
+            const url = getGatewayUrl(file.cid)
+            const isImage = /\.(png|jpe?g|gif)$/i.test(file.fileName)
+            const isPDF   = /\.pdf$/i.test(file.fileName)
+            const isVideo = /\.(mp4|webm|ogg)$/i.test(file.fileName)
+
+            return (
+              <li key={i} style={{ marginBottom: '1rem' }}>
+                {/* 1) Clickable file name */}
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  {file.fileName}
+                </a>
+
+                {/* 2) Inline preview for images */}
+                {isImage && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <img
+                      src={url}
+                      alt={file.fileName}
+                      style={{ maxWidth: '200px', maxHeight: '200px' }}
+                    />
+                  </div>
+                )}
+
+                {/* 3) Inline embed for PDFs */}
+                {isPDF && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <iframe
+                      src={url}
+                      title={file.fileName}
+                      style={{ width: '100%', height: '400px', border: '1px solid #ccc' }}
+                    />
+                  </div>
+                )}
+                
+                {/* 4) Inline video thumbnail for videos */}
+                {isVideo && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <video
+                      src={url}
+                      controls
+                      style={{ width: '100%', maxHeight: '400px', border: '1px solid #ccc' }}
+                    />
+                  </div>
+                )}
+
+              </li>
+            )
+          })}
         </ul>
       </div>
     </div>
