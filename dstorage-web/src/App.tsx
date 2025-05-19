@@ -4,6 +4,7 @@ import Web3 from 'web3'
 import { initIPFSEndpoint, getIPFSClient, getGatewayUrl, getEndpoint} from './ipfsClients'
 import { FILEVAULT_ABI } from './contracts/abi'
 import { CONTRACT_ADDRESS } from './contracts/address'
+import { deriveKey, encrypt, decrypt } from "./crypto"
 
 declare let window: any
 
@@ -66,7 +67,7 @@ const App: React.FC = () => {
 
 
   // upload file to IPFS
-  async function uploadToIPFSDaemon(file: File): Promise<string> {
+  async function uploadToIPFSDaemon(file: Uint8Array): Promise<string> {
     const ipfs = getIPFSClient()
     const result = await ipfs.add(file)
     console.log('✅ Added to IPFS daemon, CID =', result.cid.toString())
@@ -100,20 +101,35 @@ const App: React.FC = () => {
     console.log('selectedFile:', selectedFile)
     console.log('userAddress:', userAddress)
 
+
     if (!web3 || !userAddress || !selectedFile ) return
     try {
-      const cid = await uploadToIPFSDaemon(selectedFile)
+      
+      const pass = prompt("Enter encryption key for this file:")
+      if (!pass) throw new Error("Encryption key required")
+
+      const { key, salt } = await deriveKey(pass) 
+
+      
+      const plaintext = await selectedFile.arrayBuffer()
+      const encrypted = await encrypt(plaintext, key)
+
+      const payload = new Uint8Array(salt.byteLength + encrypted.byteLength)
+      payload.set(salt, 0)
+      payload.set(encrypted, salt.byteLength)
+
+      const cid = await uploadToIPFSDaemon(payload)
       console.log('Uploading to IPFS with CID:', cid)
       const contract = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
 
-    // estimate gas first, to catch estimation errors
-    const gas = await contract.methods
-      .uploadFile(selectedFile.name, cid)
-      .estimateGas({ from: userAddress });
-    console.log('Estimated gas:', gas);
+      // estimate gas first, to catch estimation errors
+      const gas = await contract.methods
+        .uploadFile(selectedFile.name, cid)
+        .estimateGas({ from: userAddress });
+      console.log('Estimated gas:', gas);
 
-    const gasPrice = await web3.eth.getGasPrice();
-    console.log('Gas price:', gasPrice);
+      const gasPrice = await web3.eth.getGasPrice();
+      console.log('Gas price:', gasPrice);
 
       // send transaction and data to smart contract
       await contract.methods
@@ -142,6 +158,41 @@ const App: React.FC = () => {
     setUploadedFiles(files)
   }
 
+  // decrypt & download a single file, prompting for key each time
+  const handleDownloadEncrypted = async (file: FileMeta) => {
+    try {
+      // 1) fetch the encrypted payload
+      const res = await fetch(getGatewayUrl(file.cid))
+      const data = new Uint8Array(await res.arrayBuffer())
+
+      // 2) extract salt (first 16 bytes) + the rest is iv+ciphertext
+      const salt      = data.slice(0, 16)
+      const encrypted = data.slice(16)
+
+      // 3) prompt the user for the passphrase
+      const pass = window.prompt(`Enter decryption key for "${file.fileName}":`)
+      if (!pass) return
+
+      // 4) re‐derive AES key with that same salt
+      const { key } = await deriveKey(pass, salt)
+
+      // 5) decrypt the iv+ciphertext
+      const plainBuf = await decrypt(encrypted, key)
+
+      // 6) offer as a download
+      const blob = new Blob([plainBuf])
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = file.fileName
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Decryption/download failed:', e)
+      alert('Could not decrypt file—wrong key or corrupted data.')
+    }
+  }
+
   return (
     <div style={{ padding: '2rem' }}>
       <h2>Decentralized Storage dApp</h2>
@@ -166,60 +217,65 @@ const App: React.FC = () => {
            onClick={() =>uploadFileToIPFS()}
           disabled={!selectedFile || !userAddress}
         >
-          Upload File
+          Upload File 
         </button>
       </div>
 
       <div style={{ marginTop: '2rem' }}>
-        <h3>Uploaded Files</h3>
+        <h3>Uploaded Files </h3>
         <ul>
           {uploadedFiles.map((file, i) => {
-            const url = getGatewayUrl(file.cid)
-            const isImage = /\.(png|jpe?g|gif)$/i.test(file.fileName)
-            const isPDF   = /\.pdf$/i.test(file.fileName)
-            const isVideo = /\.(mp4|webm|ogg)$/i.test(file.fileName)
+            // const url = getGatewayUrl(file.cid)
+            // const isImage = /\.(png|jpe?g|gif)$/i.test(file.fileName)
+            // const isPDF   = /\.pdf$/i.test(file.fileName)
+            // const isVideo = /\.(mp4|webm|ogg)$/i.test(file.fileName)
 
             return (
               <li key={i} style={{ marginBottom: '1rem' }}>
-                {/* 1) Clickable file name */}
-                <a href={url} target="_blank" rel="noopener noreferrer">
-                  {file.fileName}
-                </a>
-
-                {/* 2) Inline preview for images */}
-                {isImage && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    <img
-                      src={url}
-                      alt={file.fileName}
-                      style={{ maxWidth: '200px', maxHeight: '200px' }}
-                    />
-                  </div>
-                )}
-
-                {/* 3) Inline embed for PDFs */}
-                {isPDF && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    <iframe
-                      src={url}
-                      title={file.fileName}
-                      style={{ width: '100%', height: '400px', border: '1px solid #ccc' }}
-                    />
-                  </div>
-                )}
-                
-                {/* 4) Inline video thumbnail for videos */}
-                {isVideo && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    <video
-                      src={url}
-                      controls
-                      style={{ width: '100%', maxHeight: '400px', border: '1px solid #ccc' }}
-                    />
-                  </div>
-                )}
-
+              <button onClick={() => handleDownloadEncrypted(file)} style={{ marginLeft: '0.5rem' }}>
+              Download & Decrypt {file.fileName} {file.cid}
+              </button>
               </li>
+              // 
+              //   {/* 1) Clickable file name */}
+              //   <a href={url} target="_blank" rel="noopener noreferrer">
+              //     {file.fileName}
+              //   </a>
+
+              //   {/* 2) Inline preview for images */}
+              //   {isImage && (
+              //     <div style={{ marginTop: '0.5rem' }}>
+              //       <img
+              //         src={url}
+              //         alt={file.fileName}
+              //         style={{ maxWidth: '200px', maxHeight: '200px' }}
+              //       />
+              //     </div>
+              //   )}
+
+              //   {/* 3) Inline embed for PDFs */}
+              //   {isPDF && (
+              //     <div style={{ marginTop: '0.5rem' }}>
+              //       <iframe
+              //         src={url}
+              //         title={file.fileName}
+              //         style={{ width: '100%', height: '400px', border: '1px solid #ccc' }}
+              //       />
+              //     </div>
+              //   )}
+                
+              //   {/* 4) Inline video thumbnail for videos */}
+              //   {isVideo && (
+              //     <div style={{ marginTop: '0.5rem' }}>
+              //       <video
+              //         src={url}
+              //         controls
+              //         style={{ width: '100%', maxHeight: '400px', border: '1px solid #ccc' }}
+              //       />
+              //     </div>
+              //   )}
+
+              // </li>
             )
           })}
         </ul>
