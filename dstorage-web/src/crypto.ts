@@ -1,6 +1,9 @@
 // crypto.ts
 const encoder = new TextEncoder()
-const decoder = new TextDecoder()
+//const decoder = new TextDecoder()
+import { encrypt as sigUtilEncrypt } from '@metamask/eth-sig-util'
+import { hexlify, toUtf8Bytes} from 'ethers'
+
 
 /** Derive a CryptoKey from a string passphrase */
 export async function deriveKey(
@@ -51,3 +54,38 @@ export async function decrypt(data: Uint8Array, key: CryptoKey): Promise<ArrayBu
     ct.buffer
   )
 }
+
+/**
+ * Wrap an AES key into MetaMask’s JSON envelope, then hex-encode it.
+ */
+export function wrapKeyFor(
+  publicKeyBase64: string,
+  rawKeyBytes: Uint8Array
+): string {
+  const envelope = sigUtilEncrypt({
+    publicKey: publicKeyBase64,
+    data:     Buffer.from(rawKeyBytes).toString('base64'),
+    version:  'x25519-xsalsa20-poly1305'
+  })
+
+  // hexlify will prefix with '0x'
+  return hexlify(toUtf8Bytes(JSON.stringify(envelope)))
+}
+
+export async function unwrapKeyFor(
+  wrappedHex: string,        // e.g. "0x7b22…7d"
+  userAddress: string
+): Promise<CryptoKey> {
+
+  const base64Key: string = await (window as any).ethereum.request({
+    method: 'eth_decrypt',
+    params: [wrappedHex, userAddress]
+  })
+
+  // 4) then import back into a CryptoKey
+  const keyBytes = Uint8Array.from(atob(base64Key), c => c.charCodeAt(0))
+  return crypto.subtle.importKey(
+    'raw', keyBytes, 'AES-GCM', false, ['encrypt','decrypt']
+  )
+}
+

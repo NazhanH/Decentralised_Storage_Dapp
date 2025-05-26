@@ -1,0 +1,35 @@
+/* SidePanel.css */
+.side-panel {
+  width: 240px;
+  height: 100vh;
+  background-color: #282c34;    /* dark gray */
+  color: #ffffff;               /* React-blue text */
+  box-sizing: border-box;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-panel .logo {
+  margin: 0 0 2rem;
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.side-panel .nav-link {
+  display: block;
+  margin-bottom: 1rem;
+  text-decoration: none;
+  color: #ffffff;
+  font-weight: normal;
+  transition: color 0.2s;
+}
+
+.side-panel .nav-link:hover {
+  color: #61dafb;
+}
+
+.side-panel .nav-link.active {
+  font-weight: bold;
+  /* color: #61dafb; */
+}

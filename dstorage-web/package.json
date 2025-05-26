@@ -10,26 +10,44 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ethersproject/bytes": "^5.8.0",
+    "@ethersproject/strings": "^5.8.0",
     "@helia/unixfs": "^5.0.0",
     "@libp2p/websockets": "^9.2.10",
+    "@metamask/eth-sig-util": "^8.2.0",
+    "@stablelib/base64": "^2.0.1",
+    "@stablelib/x25519": "^2.0.1",
+    "@stablelib/xchacha20poly1305": "^2.0.1",
+    "eth-sig-util": "^3.0.1",
+    "ethereumjs-util": "^7.1.5",
+    "ethers": "^6.14.1",
     "helia": "^5.3.0",
     "ipfs-http-client": "^60.0.1",
+    "libsodium": "^0.7.15",
+    "libsodium-wrappers": "^0.7.15",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router": "^7.6.0",
+    "react-router-dom": "^7.6.0",
+    "tweetnacl-sealedbox-js": "^1.2.0",
+    "tweetnacl-util": "^0.15.1",
     "uint8arrays": "^5.1.0",
     "web3": "^4.16.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
+    "@types/libsodium-wrappers": "^0.7.14",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.22.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
+    "events": "^3.3.0",
     "globals": "^16.0.0",
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.26.1",
-    "vite": "^6.3.1"
+    "vite": "^6.3.1",
+    "vite-plugin-node-polyfills": "^0.23.0"
   }
 }

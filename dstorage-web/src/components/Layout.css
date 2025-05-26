@@ -1,0 +1,18 @@
+.app-container {
+  display: flex;
+  height: 100%;      /* ← fills the full height from html/body/root */
+  width: 100%;       /* ← fills the full width too */
+  overflow: hidden;  /* optional, to avoid double-scrollbars */
+}
+
+/* Layout.css (continued) */
+.main-content {
+  flex: 1;                   /* take up remaining width beside sidebar */
+  display: flex;
+  flex-direction: column;    /* stack children vertically */
+  justify-content: flex-start;  /* start at the top */
+  align-items: center;      /* left-align by default */
+  background: #000000;          /* whatever background you prefer */
+  overflow-y: auto;             /* scroll if content overflows */
+  padding: 1rem;
+}
