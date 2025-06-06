@@ -4,6 +4,7 @@ import { useWeb3 } from '../context/Web3Context'
 import { FILEVAULT_ABI } from '../contracts/abi'
 import { CONTRACT_ADDRESS } from '../contracts/address'
 import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 
 declare let window: any
 
@@ -12,7 +13,6 @@ export default function LandingPage() {
   const navigate = useNavigate()
 
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // On mount (or whenever web3/userAddress changes), check if the user has already registered a public key
@@ -25,8 +25,9 @@ export default function LandingPage() {
   }, [web3, userAddress])
 
   async function checkRegistration() {
+    if (!web3 || !userAddress) return
+    const toastId = toast.loading("Checking registration...")
     try {
-      setLoading(true)
       const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
       // encryptionKeys[userAddress] is an empty string if not yet registered
       const existingKey: string = await contract.methods
@@ -34,19 +35,21 @@ export default function LandingPage() {
         .call({ from: userAddress })
 
       setIsRegistered(existingKey.length > 0)
-      setLoading(false)
+      toast.dismiss(toastId) // clears the loading toast
+      toast.success("You're registered!") // or other success messages
     } catch (err: any) {
       console.error('Registration check failed', err)
       setError('Failed to check registration. Please try again.')
-      setLoading(false)
+      toast.dismiss(toastId) // clears the loading toast
+      toast.error("Failed to check registration") // or other success messages
     }
   }
 
   async function handleRegister() {
     if (!userAddress) return
+    const loadingToast = toast.loading("Registring...") // or "Registering..."
     try {
       setError(null)
-      setLoading(true)
       // 1) Request the user's EIP-747 encryption public key from MetaMask
       const pubKey: string = await window.ethereum.request({
         method: 'eth_getEncryptionPublicKey',
@@ -61,7 +64,8 @@ export default function LandingPage() {
 
       // 3) Mark as registered and stop loading
       setIsRegistered(true)
-      setLoading(false)
+      toast.dismiss(loadingToast) // clears the loading toast
+      toast.success("Registered successfully!") 
     } catch (err: any) {
       console.error('Registration failed', err)
       if (err.code === 4001) {
@@ -69,52 +73,43 @@ export default function LandingPage() {
       } else {
         setError('Registration transaction failed.')
       }
-      setLoading(false)
+      toast.dismiss(loadingToast)
+      toast.error("Failed to register") // etc.
     }
   }
 
-  if (loading || isRegistered === null) {
-    return (
-      <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-        <p>Loading…</p>
-      </div>
-    )
+  if (isRegistered === null) {
+    return null
   }
 
   if (!isRegistered) {
     // First-time user: show registration UI
     return (
-      <div style={{ maxWidth: 400, margin: '2rem auto', textAlign: 'center' }}>
-        <h1>Welcome to FileVault</h1>
-        <p>
-          To get started, you need to register your encryption public key. This
-          enables your files to be encrypted.
-        </p>
-        {error && (
-          <p style={{ color: 'red', marginBottom: '1rem' }}>{error}</p>
-        )}
-        <button
-          onClick={handleRegister}
-          disabled={loading}
-          style={{
-            padding: '0.75rem 1.5rem',
-            fontSize: '1rem',
-            cursor: 'pointer'
-          }}
-        >
-          {loading ? 'Registering…' : 'Register Public Key'}
-        </button>
-      </div>
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4 text-center">
+      <h1 className="text-5xl md:text-6xl font-bold mb-4">Welcome to <span className="text-blue-400">FileVault</span></h1>
+      <p className="text-lg md:text-xl text-gray-300 mb-6 max-w-xl">
+        To get started, you need to register your Metamask encryption public key. This enables your files to be encrypted.
+      </p>
+      <button
+        className="bg-purple-600 hover:bg-purple-700 transition text-white font-semibold px-6 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={false}
+        onClick={handleRegister}
+      >
+        Register Public Key
+      </button>
+    </div>
     )
   }
 
   // Registered user: show navigation to personal & group folders
   return (
-    <div style={{ maxWidth: 500, margin: '2rem auto', textAlign: 'center' }}>
-      <h1>Welcome!</h1>
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4 text-center">
+      <h1 className="text-5xl md:text-6xl font-bold mb-4">Welcome back!</h1>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <button
           onClick={() => navigate('/in/personal')}
+          disabled= {false}
           style={{
             padding: '0.75rem 1.5rem',
             fontSize: '1rem',
