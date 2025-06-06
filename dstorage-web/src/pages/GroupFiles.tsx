@@ -1,6 +1,6 @@
 // src/pages/GroupFiles.tsx
 import { useEffect, useState, FormEvent } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useWeb3 } from '../context/Web3Context'
 import { FILEVAULT_ABI } from '../contracts/abi'
 import { CONTRACT_ADDRESS } from '../contracts/address'
@@ -19,7 +19,8 @@ export default function GroupFiles() {
   const { web3, userAddress, ipfsClient } = useWeb3()
   const [files, setFiles] = useState<FileMeta[]>([])
   const [folderName, setFolderName] = useState<string>('')
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)  
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (web3 && userAddress) loadGroupFiles()
@@ -101,6 +102,9 @@ export default function GroupFiles() {
   return (
     <div>
       <h2>{folderName}</h2>
+      <button onClick={() => navigate(`/in/groups/${folderId}/members`)}>
+      Manage Members & Permissions
+      </button>
       <form onSubmit={handleUpload} style={{ marginBottom: 16 }}>
         <input
           type="file"

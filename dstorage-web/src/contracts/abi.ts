@@ -1,6 +1,6 @@
 // src/contracts/abi.ts
 export const FILEVAULT_ABI = [
-    {
+     {
       "inputs": [],
       "stateMutability": "nonpayable",
       "type": "constructor"
@@ -284,6 +284,25 @@ export const FILEVAULT_ABI = [
       "type": "function"
     },
     {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "encryptionKeys",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [],
       "name": "fileCount",
       "outputs": [
@@ -323,6 +342,25 @@ export const FILEVAULT_ABI = [
           "internalType": "bytes",
           "name": "",
           "type": "bytes"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address[]",
+          "name": "users",
+          "type": "address[]"
+        }
+      ],
+      "name": "getEncryptionKeys",
+      "outputs": [
+        {
+          "internalType": "string[]",
+          "name": "keys",
+          "type": "string[]"
         }
       ],
       "stateMutability": "view",
@@ -414,6 +452,25 @@ export const FILEVAULT_ABI = [
           "internalType": "string",
           "name": "",
           "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "folderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getFolderOwner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "folderOwner",
+          "type": "address"
         }
       ],
       "stateMutability": "view",
@@ -546,6 +603,19 @@ export const FILEVAULT_ABI = [
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "pubKey",
+          "type": "string"
+        }
+      ],
+      "name": "registerEncryptionKey",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -686,4 +756,4 @@ export const FILEVAULT_ABI = [
       "stateMutability": "nonpayable",
       "type": "function"
     }
-];
+  ];

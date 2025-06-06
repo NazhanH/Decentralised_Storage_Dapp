@@ -92,7 +92,7 @@ return (
       <ul>
         {folders.map(f => (
           <li key={f.folderId} style={{ marginBottom: 6 }} className="folder-link">
-            <NavLink to={`/folders/${f.folderId}`} >
+            <NavLink to={`/in/folders/${f.folderId}`} >
                 📁 {f.folderName}
             </NavLink>
           </li>

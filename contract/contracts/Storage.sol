@@ -49,6 +49,8 @@ contract Storage {
     mapping(address => uint256[])                     private personalFileIds;
     mapping(address => uint256)                       private personalFileCount;
 
+    mapping(address=>string) public encryptionKeys;
+
 
     // ----- EVENTS -----
     event OwnerUpdated(address indexed newOwner);
@@ -223,6 +225,11 @@ contract Storage {
         return f.encryptedFolderKey[msg.sender];
     }
 
+    /// @notice get folder owner
+    function getFolderOwner(uint256 folderId) external view returns (address folderOwner){
+        return folders[folderId].folderOwner;
+    }
+
     /// @notice List members of a folder
     function getFolderMembers(uint256 folderId) external view returns (address[] memory){
         return folders[folderId].members;
@@ -328,6 +335,24 @@ function getPersonalFolders() external view returns ( uint256[] memory folderIds
         File storage fe = personalFiles[msg.sender][fileId];
         require(fe.available, "File is not available");
         return (fe.fileName, fe.cid);
+    }
+
+    function registerEncryptionKey(string calldata pubKey)external{
+        encryptionKeys[msg.sender] = pubKey;
+    }
+
+    function getEncryptionKeys(address[] calldata users)
+        external
+        view
+        returns (string[] memory keys)
+    {
+        uint256 len = users.length;
+        keys = new string[](len);
+
+        for (uint256 i = 0; i < len; i++) {
+            // If a user hasn’t registered their key, return empty string.
+            keys[i] = encryptionKeys[users[i]];
+        }
     }
 
 }

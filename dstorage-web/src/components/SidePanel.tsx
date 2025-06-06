@@ -24,9 +24,9 @@ export default function SidePanel() {
       </p>
 
       <nav>
-       <NavLink to="/personal" end  className={({ isActive }) =>isActive ? 'nav-link active' : 'nav-link'}>Personal Files</NavLink>
-       <NavLink to="/folders" end  className={({ isActive }) =>isActive ? 'nav-link active' : 'nav-link'}>Personal Folders</NavLink>
-       <NavLink to="/groups" end  className={({ isActive }) =>isActive ? 'nav-link active' : 'nav-link'}>Groups</NavLink>
+       <NavLink to="/in/personal" end  className={({ isActive }) =>isActive ? 'nav-link active' : 'nav-link'}>Personal Files</NavLink>
+       <NavLink to="/in/folders" end  className={({ isActive }) =>isActive ? 'nav-link active' : 'nav-link'}>Personal Folders</NavLink>
+       <NavLink to="/in/groups" end  className={({ isActive }) =>isActive ? 'nav-link active' : 'nav-link'}>Groups</NavLink>
       </nav>
     </aside>
   )

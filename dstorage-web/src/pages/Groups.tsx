@@ -18,6 +18,8 @@ export default function Groups() {
   const [groups, setGroups] = useState<GroupMeta[]>([])
   const [newName, setNewName] = useState<string>('')
   const [membersInput, setMembersInput] = useState<string>(userAddress || '')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState<boolean>(false)
 
   useEffect(() => {
     if (web3 && userAddress) loadGroups()
@@ -50,34 +52,50 @@ export default function Groups() {
     if (!web3 || !userAddress || !newName || !membersInput) return
 
     const members = membersInput.split(',').map(a => a.trim()).filter(a => a)
-    const keyBytes = window.crypto.getRandomValues(new Uint8Array(32))
 
-    // wrap for each member
-    const pubKeys = await Promise.all(
-      members.map(addr =>
-        window.ethereum.request({
-          method: 'eth_getEncryptionPublicKey',
-          params: [addr]
-        })
+    setLoading(true)
+    try{
+      const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+
+      const pubKeys: string[] = await contract.methods
+      .getEncryptionKeys(members)
+      .call({ from: userAddress })
+
+      for (let i = 0; i < members.length; i++) {
+        if (!pubKeys[i] || pubKeys[i].length === 0) {
+          throw new Error(`Member ${members[i]} has not registered a public key yet`)
+        }
+      }
+
+      const keyBytes = window.crypto.getRandomValues(new Uint8Array(32))
+      
+      const wrappedKeys = await Promise.all(
+        pubKeys.map(pk => wrapKeyFor(pk, keyBytes))
       )
-    )
-    const wrappedKeys = await Promise.all(
-      pubKeys.map(pk => wrapKeyFor(pk, keyBytes))
-    )
 
-    const contract = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
-    await contract.methods
-      .createFolder(newName, members, wrappedKeys)
-      .send({ from: userAddress })
+      await contract.methods
+        .createFolder(newName, members, wrappedKeys)
+        .send({ from: userAddress })
 
-    setNewName('')
-    setMembersInput(userAddress)
-    loadGroups()
+      setNewName('')
+      setMembersInput(userAddress)
+      await loadGroups()
+      setLoading(false)
+
+    }catch (err: any) {
+      console.error('Group creation failed', err)
+      setError(err.message || 'Failed to create group')
+      setLoading(false)
+    }
+    
   }
 
   return (
     <div>
       <h2>My Group Folders</h2>
+      {error && (
+        <p style={{ color: 'red', marginBottom: '0.5rem' }}>{error}</p>
+      )}
       <form onSubmit={onCreate} style={{ marginBottom: '1rem' }}>
         <input
           type="text"
@@ -95,12 +113,14 @@ export default function Groups() {
           style={{ marginRight: 8, width: '50%' }}
           required
         />
-        <button type="submit">Create Group</button>
+        <button type="submit" disabled={loading}
+          >{loading ? 'Creating…' : 'Create Group'}
+        </button>
       </form>
       <ul>
         {groups.map(f => (
           <li key={f.folderId} style={{ marginBottom: 6 }}>
-            <NavLink to={`/groups/${f.folderId}`}>📁 {f.folderName}</NavLink>
+            <NavLink to={`/in/groups/${f.folderId}`}>📁 {f.folderName}</NavLink>
           </li>
         ))}
       </ul>

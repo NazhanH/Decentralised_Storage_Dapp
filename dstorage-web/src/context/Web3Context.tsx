@@ -3,6 +3,8 @@ import React, {createContext, useContext, useState, useEffect} from 'react'
 import Web3 from 'web3'
 import { getEndpoint, initIPFSEndpoint,getIPFSClient} from '../ipfs/ipfsClients'
 import { IPFSHTTPClient } from 'ipfs-http-client'
+import { FILEVAULT_ABI } from '../contracts/abi'
+import { CONTRACT_ADDRESS } from '../contracts/address'
 
 interface Web3State {
   web3: Web3 | null
@@ -11,6 +13,8 @@ interface Web3State {
   gatewayReady: boolean
   gatewayName: string
   ipfsClient: IPFSHTTPClient | null
+  isRegistered: boolean | null
+  checkRegistration: () => Promise<boolean>
 }
 
 declare let window: any
@@ -29,6 +33,7 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   const [gatewayReady,  setGatewayReady]  = useState(false)
   const [gatewayName,   setGatewayName]   = useState('')
   const [ipfsClient, setIpfsClient]     = useState<IPFSHTTPClient|null>(null)
+  const [isRegistered, setIsRegistered] = useState<boolean | null>(null)
   //let web3: Web3
 
   async function connectWallet() {
@@ -58,6 +63,8 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       const client = getIPFSClient()
       setIpfsClient(client)
       })
+    } else {
+      console.warn('MetaMask not detected')
     }
   }, [])
 
@@ -75,6 +82,8 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
         //Listen for account switches
         const handleAccountsChanged = (accounts: string[] = []) => {
           setUserAddress(accounts[0] || '')
+
+          setIsRegistered(null)
         }
         window.ethereum.on('accountsChanged', handleAccountsChanged)
   
@@ -90,10 +99,42 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       }
     }, [])
 
+    useEffect(() => {
+      if (web3 && userAddress) {
+        checkRegistration().then((registered) => {
+          setIsRegistered(registered)
+        })
+      } else {
+        // No wallet or no address → treat as “not registered yet”
+        setIsRegistered(null)
+      }
+    }, [web3, userAddress])
+
+    async function checkRegistration(): Promise<boolean> {
+      if (!web3 || !userAddress) return false
+
+      try {
+        const ctr = new web3.eth.Contract(
+          FILEVAULT_ABI,
+          CONTRACT_ADDRESS
+        )
+        // encryptionKeys is a public mapping(address => string) on your contract:
+        const existingKey: string = await ctr.methods
+          .encryptionKeys(userAddress)
+          .call({ from: userAddress })
+        return existingKey.length > 0
+      } catch (err) {
+        console.error(
+          'Error checking encryption key registration:',
+          err
+        )
+        return false
+      }
+    }
 
 
   return (
-    <Web3Ctx.Provider value={{ web3, userAddress, connectWallet, gatewayReady, gatewayName, ipfsClient}}>
+    <Web3Ctx.Provider value={{ web3, userAddress, connectWallet, gatewayReady, gatewayName, ipfsClient,isRegistered,checkRegistration}}>
       {children}
     </Web3Ctx.Provider>
   )

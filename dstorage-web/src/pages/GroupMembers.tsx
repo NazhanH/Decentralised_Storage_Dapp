@@ -1,0 +1,336 @@
+// src/pages/GroupMembers.tsx
+import React, { useEffect, useState, ChangeEvent, FormEvent } from 'react'
+import { useParams } from 'react-router-dom'
+import { useWeb3 } from '../context/Web3Context'
+import { FILEVAULT_ABI } from '../contracts/abi'
+import { CONTRACT_ADDRESS } from '../contracts/address'
+import { wrapKeyFor, unwrapKeyFor } from '../crypto'
+
+// Permission bit‐flags (must match those in your Solidity contract)
+const PERM_ADD_MEMBER         = 1 << 0  // 0b00001
+const PERM_REMOVE_MEMBER      = 1 << 1  // 0b00010
+const PERM_UPLOAD             = 1 << 2  // 0b00100
+const PERM_DELETE             = 1 << 3  // 0b01000
+const PERM_MANAGE_PERMISSIONS = 1 << 4  // 0b10000
+
+interface MemberInfo {
+  address: string
+  perms: number
+  isOwner: boolean
+}
+
+export default function GroupMembers() {
+  const { id } = useParams<{ id: string }>()
+  const folderId = Number(id)
+  const { web3, userAddress } = useWeb3()
+  const [members, setMembers] = useState<MemberInfo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [updating, setUpdating] = useState<Record<string, boolean>>({})
+
+  const [newAddr, setNewAddr] = useState<string>('')
+  const [adding, setAdding] = useState<boolean>(false)
+
+  /** Fetch folder owner and full member list + permissions */
+  useEffect(() => {
+    if (!web3 || !userAddress || isNaN(folderId)) return
+    loadMembers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [web3, userAddress, folderId])
+
+  async function loadMembers() {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+
+      // 1) Fetch folder owner from on-chain (assumes your contract has a getter)
+      const owner: string = await contract.methods
+        .getFolderOwner(folderId) // direct public struct accessor
+        .call({ from: userAddress })
+ 
+
+      // 2) Fetch list of all member addresses
+      const rawMembers: string[] = await contract.methods
+        .getFolderMembers(folderId)
+        .call({ from: userAddress })
+
+      // 3) For each member, fetch their permission bitmask
+      const infos: MemberInfo[] = await Promise.all(
+        rawMembers.map(async (addr) => {
+          // getMemberPermissions requires caller to be owner or a manager
+          const perms: string = await contract.methods
+            .getMemberPermissions(folderId, addr)
+            .call({ from: userAddress })
+
+          return {
+            address: addr,
+            perms: Number(perms),
+            isOwner: addr.toLowerCase() === owner.toLowerCase(),
+          }
+        })
+      )
+
+      setMembers(infos)
+      setLoading(false)
+    } catch (err: any) {
+      console.error('Failed to load group members', err)
+      setError('Could not fetch members or permissions.')
+      setLoading(false)
+    }
+  }
+
+  /** Toggle a single permission bit for a given member */
+  async function togglePermission(memberAddr: string, flag: number, checked: boolean) {
+    if (!web3 || !userAddress) return
+
+    // Prevent multiple updates for same member simultaneously
+    setUpdating((u) => ({ ...u, [memberAddr]: true }))
+    setError(null)
+
+    try {
+      const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+
+      // 1) Find the current bitmask for this member
+      const current = members.find((m) => m.address === memberAddr)?.perms ?? 0
+
+      // 2) Compute new bitmask
+      const newMask = checked ? (current | flag) : (current & ~flag)
+
+      // 3) Send transaction: setMemberPermissions(folderId, memberAddr, newMask)
+      await contract.methods
+        .setMemberPermissions(folderId, memberAddr, newMask)
+        .send({ from: userAddress })
+
+      // 4) Reflect the change locally
+      setMembers((ms) =>
+        ms.map((m) =>
+          m.address === memberAddr ? { ...m, perms: newMask } : m
+        )
+      )
+    } catch (err: any) {
+      console.error('Failed to update permissions', err)
+      setError(err.message || 'Permission update failed.')
+    } finally {
+      setUpdating((u) => ({ ...u, [memberAddr]: false }))
+    }
+  }
+
+  /** Handler to remove a member (only if you have PERM_REMOVE_MEMBER) */
+  async function handleRemove(memberAddr: string) {
+    if (!web3 || !userAddress) return
+
+    setUpdating((u) => ({ ...u, [memberAddr]: true }))
+    setError(null)
+
+    try {
+      const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+      // Call removeMember(folderId, memberAddr)
+      await contract.methods
+        .removeMember(folderId, memberAddr)
+        .send({ from: userAddress })
+
+      // Reload the list after removal
+      await loadMembers()
+    } catch (err: any) {
+      console.error('Failed to remove member', err)
+      setError(err.message || 'Member removal failed.')
+    } finally {
+      setUpdating((u) => ({ ...u, [memberAddr]: false }))
+    }
+  }
+
+  async function handleAdd(e: FormEvent) {
+  e.preventDefault()
+  setError(null)
+  if (!web3 || !userAddress) return
+  if (!newAddr.trim()) {
+    setError('Please enter a valid address.')
+    return
+  }
+  if (members.some(m => m.address.toLowerCase() === newAddr.toLowerCase())) {
+    setError('That address is already a member.')
+    return
+  }
+
+  setAdding(true)
+  try {
+    const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+
+    // 1) Fetch the wrapped key for the current user
+    const wrappedHex: string = await contract.methods
+      .getEncryptedFolderKey(folderId)
+      .call({ from: userAddress })
+
+    // 2) Call MetaMask to decrypt; it returns a base64‐encoded string
+    const b64Key: string = await (window as any).ethereum.request({
+      method: 'eth_decrypt',
+      params: [wrappedHex, userAddress],
+    })
+    // ‣ b64Key is exactly the raw AES key, base64‐encoded
+
+    // 3) Convert base64 to Uint8Array ‣ these are your raw AES bytes
+    const rawBytes = Uint8Array.from(atob(b64Key), c => c.charCodeAt(0))
+
+    // 4) Fetch the new member’s registered public key on‐chain
+    const pk: string = await contract.methods
+      .encryptionKeys(newAddr)
+      .call({ from: userAddress })
+    if (!pk || pk.length === 0) {
+      throw new Error(`User ${newAddr} has not registered.`)
+    }
+
+    // 5) Wrap rawBytes for the new member
+    const wrappedForNew = await wrapKeyFor(pk, rawBytes)
+
+    // 6) Add them on‐chain
+    await contract.methods
+      .addMember(folderId, newAddr, wrappedForNew)
+      .send({ from: userAddress })
+
+    // 7) Reload
+    setNewAddr('')
+    await loadMembers()
+  } catch (err: any) {
+    console.error('Failed to add member', err)
+    setError(err.message || 'Add member failed.')
+  } finally {
+    setAdding(false)
+  }
+}
+
+
+  /** Render a checkbox for a specific permission flag */
+  function renderCheckbox(
+    member: MemberInfo,
+    label: string,
+    flag: number
+  ) {
+    const hasFlag = (member.perms & flag) !== 0
+    const disabled = member.isOwner || updating[member.address] || loading
+
+    return (
+      <label style={{ marginRight: 12 }}>
+        <input
+          type="checkbox"
+          checked={hasFlag}
+          disabled={disabled}
+          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+            togglePermission(member.address, flag, e.target.checked)
+          }
+        />
+        {label}
+      </label>
+    )
+  }
+
+  if (loading) {
+    return <p style={{ textAlign: 'center', marginTop: '2rem' }}>Loading members…</p>
+  }
+
+  if (error) {
+    return <p style={{ color: 'red', textAlign: 'center', marginTop: '1rem' }}>{error}</p>
+  }
+
+  if (members.length === 0) {
+    return <p style={{ textAlign: 'center', marginTop: '2rem' }}>No members found.</p>
+  }
+
+  const myInfo = members.find(
+    (m) => m.address.toLowerCase() === userAddress.toLowerCase()
+  )
+  const iCanAdd = !!myInfo && (myInfo.perms & PERM_ADD_MEMBER) !== 0
+  const iCanRemove = !!myInfo && (myInfo.perms & PERM_REMOVE_MEMBER) !== 0
+
+  return (
+    <div style={{ maxWidth: 600, margin: '2rem auto' }}>
+      <h2>Manage Members & Permissions (Folder ID: {folderId})</h2>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+
+      {/* Add Member Form (only if I have ADD_MEMBER) */}
+      {iCanAdd && (
+        <form
+          onSubmit={handleAdd}
+          style={{
+            marginBottom: '1rem',
+            display: 'flex',
+            gap: '0.5rem',
+          }}
+        >
+          <input
+            type="text"
+            placeholder="New member address"
+            value={newAddr}
+            onChange={(e) => setNewAddr(e.target.value)}
+            style={{ flex: 1 }}
+            required
+          />
+          <button type="submit" disabled={adding}>
+            {adding ? 'Adding…' : 'Add Member'}
+          </button>
+        </form>
+      )}
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: '8px' }}>Address</th>
+            <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>Add</th>
+            <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>Remove</th>
+            <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>Upload</th>
+            <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>Delete</th>
+            <th style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>Manage</th>
+          </tr>
+        </thead>
+        <tbody>
+          {members.map((member) => (
+            <tr key={member.address}>
+              <td style={{ padding: '8px', fontFamily: 'monospace' }}>
+                {member.address}
+                {member.isOwner && <span style={{ marginLeft: 8, color: 'green' }}>(Owner)</span>}
+              </td>
+              <td style={{ padding: '8px', textAlign: 'center' }}>
+                {renderCheckbox(member, '', PERM_ADD_MEMBER)}
+              </td>
+              <td style={{ padding: '8px', textAlign: 'center' }}>
+                {renderCheckbox(member, '', PERM_REMOVE_MEMBER)}
+              </td>
+              <td style={{ padding: '8px', textAlign: 'center' }}>
+                {renderCheckbox(member, '', PERM_UPLOAD)}
+              </td>
+              <td style={{ padding: '8px', textAlign: 'center' }}>
+                {renderCheckbox(member, '', PERM_DELETE)}
+              </td>
+              <td style={{ padding: '8px', textAlign: 'center' }}>
+                {renderCheckbox(member, '', PERM_MANAGE_PERMISSIONS)}
+              </td>
+              {/* Remove Button (if I have REMOVE_MEMBER and not owner) */}
+              <td style={{ padding: '8px', textAlign: 'center' }}>
+                {iCanRemove && !member.isOwner ? (
+                  <button
+                    onClick={() => handleRemove(member.address)}
+                    disabled={updating[member.address]}
+                    style={{
+                      background: 'red',
+                      color: 'white',
+                      border: 'none',
+                      padding: '4px 8px',
+                      cursor: updating[member.address]
+                        ? 'not-allowed'
+                        : 'pointer',
+                    }}
+                  >
+                    {updating[member.address] ? 'Removing…' : 'Remove'}
+                  </button>
+                ) : (
+                  <span style={{ color: '#888' }}>—</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
