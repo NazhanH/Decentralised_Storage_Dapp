@@ -1,6 +1,7 @@
 // src/pages/LandingPage.tsx
-import React, { useEffect, useState } from 'react'
-import { useWeb3 } from '../context/Web3Context'
+import React, {createContext,
+  useContext, useEffect, useState } from 'react'
+import { useWeb3} from '../context/Web3Context'
 import { FILEVAULT_ABI } from '../contracts/abi'
 import { CONTRACT_ADDRESS } from '../contracts/address'
 import { useNavigate } from 'react-router-dom'
@@ -9,7 +10,7 @@ import toast from 'react-hot-toast'
 declare let window: any
 
 export default function LandingPage() {
-  const { web3, userAddress } = useWeb3()
+  const { web3, userAddress ,connectWallet} = useWeb3()
   const navigate = useNavigate()
 
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null)
@@ -23,6 +24,17 @@ export default function LandingPage() {
     }
     checkRegistration()
   }, [web3, userAddress])
+
+    // 1) On mount: if no wallet connected, trigger the connect flow
+  useEffect(() => {
+    if (!userAddress && web3) {
+      connectWallet().catch((err: any) => {
+        console.error('Failed to connect wallet:', err)
+        setError('Please connect your wallet to continue.')
+      })
+    }
+  // only run once on mount or if web3 becomes available
+  }, [web3, connectWallet, userAddress])
 
   async function checkRegistration() {
     if (!web3 || !userAddress) return
@@ -78,8 +90,17 @@ export default function LandingPage() {
     }
   }
 
-  if (isRegistered === null) {
-    return null
+  // if (isRegistered === null) {
+  //   return null
+  // }
+
+    // 1) Wallet not yet connected
+  if (!userAddress) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: '4rem' }}>
+        <p>Connecting your wallet…</p>
+      </div>
+    )
   }
 
   if (!isRegistered) {

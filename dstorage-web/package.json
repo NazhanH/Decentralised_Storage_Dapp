@@ -15,6 +15,7 @@
     "@helia/unixfs": "^5.0.0",
     "@libp2p/websockets": "^9.2.10",
     "@metamask/eth-sig-util": "^8.2.0",
+    "@radix-ui/react-dialog": "^1.1.14",
     "@stablelib/base64": "^2.0.1",
     "@stablelib/x25519": "^2.0.1",
     "@stablelib/xchacha20poly1305": "^2.0.1",

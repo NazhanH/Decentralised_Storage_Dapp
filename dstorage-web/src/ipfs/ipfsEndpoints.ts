@@ -7,8 +7,8 @@ export interface Endpoint{
 export const IPFS_ENDPOINTS: Endpoint[] = [
     {
         name: 'Localhost IPFS',
-        apiUrl: 'https://127.0.0.1:5001/api/v0',
-        gatewayUrl: 'https://127.0.0.1/ipfs/',
+        apiUrl: 'http://127.0.0.1:5001/api/v0',
+        gatewayUrl: 'http://127.0.0.1/ipfs/',
     },
     {
         name: 'Node 1',

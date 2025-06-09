@@ -5,6 +5,10 @@ import { CONTRACT_ADDRESS } from '../contracts/address'
 import { useWeb3 } from '../context/Web3Context'
 import { wrapKeyFor } from '../crypto'
 import { NavLink } from 'react-router-dom'
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import toast from "react-hot-toast"
+import { useNavigate } from 'react-router-dom'
+import { Plus } from "lucide-react"
 
 declare let window: any
 
@@ -16,14 +20,24 @@ interface GroupMeta {
 export default function Groups() {
   const { web3, userAddress } = useWeb3()
   const [groups, setGroups] = useState<GroupMeta[]>([])
-  const [newName, setNewName] = useState<string>('')
-  const [membersInput, setMembersInput] = useState<string>(userAddress || '')
+  const [newName, setNewName] = useState("")
+  const [membersInput, setMembersInput] = useState("")
+  const [membersList, setMembersList] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (web3 && userAddress) loadGroups()
   }, [web3, userAddress])
+
+  useEffect(() => {
+  if (userAddress) {
+    setMembersList([userAddress])
+    // setMembersInput(userAddress)
+  }
+}, [userAddress])
 
   async function loadGroups() {
     const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
@@ -49,21 +63,19 @@ export default function Groups() {
 
   async function onCreate(e: FormEvent) {
     e.preventDefault()
-    if (!web3 || !userAddress || !newName || !membersInput) return
-
-    const members = membersInput.split(',').map(a => a.trim()).filter(a => a)
+    if (!web3 || !userAddress || !newName || membersList.length === 0) return
 
     setLoading(true)
     try{
       const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
 
       const pubKeys: string[] = await contract.methods
-      .getEncryptionKeys(members)
+      .getEncryptionKeys(membersList)
       .call({ from: userAddress })
 
-      for (let i = 0; i < members.length; i++) {
+      for (let i = 0; i < membersList.length; i++) {
         if (!pubKeys[i] || pubKeys[i].length === 0) {
-          throw new Error(`Member ${members[i]} has not registered a public key yet`)
+          throw new Error(`Member ${membersList[i]} has not registered a public key yet`)
         }
       }
 
@@ -74,10 +86,12 @@ export default function Groups() {
       )
 
       await contract.methods
-        .createFolder(newName, members, wrappedKeys)
+        .createFolder(newName, membersList, wrappedKeys)
         .send({ from: userAddress })
 
-      setNewName('')
+      toast.success("Group created!")
+      setDialogOpen(false)
+      setNewName("")
       setMembersInput(userAddress)
       await loadGroups()
       setLoading(false)
@@ -91,39 +105,126 @@ export default function Groups() {
   }
 
   return (
-    <div>
-      <h2>My Group Folders</h2>
-      {error && (
-        <p style={{ color: 'red', marginBottom: '0.5rem' }}>{error}</p>
-      )}
-      <form onSubmit={onCreate} style={{ marginBottom: '1rem' }}>
-        <input
-          type="text"
-          placeholder="Group name"
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          style={{ marginRight: 8 }}
-          required
-        />
-        <input
-          type="text"
-          placeholder="Member addresses (comma-separated)"
-          value={membersInput}
-          onChange={e => setMembersInput(e.target.value)}
-          style={{ marginRight: 8, width: '50%' }}
-          required
-        />
-        <button type="submit" disabled={loading}
-          >{loading ? 'Creating…' : 'Create Group'}
-        </button>
-      </form>
-      <ul>
+    <div className="px-6 py-4 w-full max-w-7xl mx-auto">
+      <div className="w-full flex items-center gap-3 mb-6">
+        <h1 className="text-3xl font-bold text-white">Group Folders</h1>
+        {error && (
+          <p style={{ color: 'red', marginBottom: '0.5rem' }}>{error}</p>
+        )}
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <button className="p-2 rounded bg-neutral-800 hover:bg-neutral-700 text-white">
+              <Plus size={20} />
+            </button>
+          </DialogTrigger>
+          <DialogContent className="bg-neutral-900 text-white max-w-md rounded">
+            <h2 className="text-lg font-semibold mb-4">Create Group</h2>
+            <form
+              onSubmit={onCreate}
+              className="space-y-4"
+            >
+              <input
+                type="text"
+                placeholder="Group name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="w-full px-3 py-2 rounded bg-neutral-800 text-white border border-neutral-700 focus:outline-none"
+                required
+              />
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter member address"
+                  value={membersInput}
+                  onChange={(e) => setMembersInput(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded bg-neutral-800 text-white border border-neutral-700"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (membersInput.trim()) {
+                      setMembersList(prev => [...prev, membersInput.trim()])
+                      setMembersInput("")
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded"
+                >
+                  <Plus size={15} />
+                </button>
+              </div>
+
+              <ul className="text-sm text-gray-400">
+                {membersList.map((member, idx) => (
+                  <li key={idx} className="flex justify-between items-center border-b border-gray-700 py-1">
+                    <span>{member}</span>
+                    {member !== userAddress && (
+                      <button
+                        onClick={() =>
+                          setMembersList(membersList.filter((m) => m !== member))
+                        }
+                        className="text-red-400 hover:text-red-200 text-xs"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+
+              {error && <p className="text-red-400 text-sm">{error}</p>}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDialogOpen(false);
+                    setNewName("");
+                    setMembersList([userAddress]);
+                  }}
+                  className="px-4 py-2 rounded bg-neutral-700 hover:bg-neutral-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 rounded bg-green-600 hover:bg-green-500 text-white"
+                >
+                  {loading ? "Creating…" : "Create Group"}
+                </button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+
+      {/* <ul>
         {groups.map(f => (
           <li key={f.folderId} style={{ marginBottom: 6 }}>
             <NavLink to={`/in/groups/${f.folderId}`}>📁 {f.folderName}</NavLink>
           </li>
         ))}
-      </ul>
+      </ul> */}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {groups.map((group) => (
+          <div
+            key={group.folderId}
+            onClick={() => navigate(`/in/groups/${group.folderId}`)}
+            className="group cursor-pointer w-56"
+          >
+            <div className="h-3 w-1/2 rounded-t-md bg-gray-800 group-hover:bg-sky-800"></div>
+
+            <div className="rounded-b-md bg-gray-700 group-hover:bg-sky-700 p-4 shadow-md">
+              <h3 className="text-xl text-white font-semibold mb-2">{group.folderName}</h3>
+              {/* <h4 className="text-xl text-white font-semibold mb-2">{group.folderOwner}</h4> */}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

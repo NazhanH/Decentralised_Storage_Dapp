@@ -211,7 +211,7 @@ export default function GroupMembers() {
     const disabled = member.isOwner || updating[member.address] || loading
 
     return (
-      <label style={{ marginRight: 12 }}>
+      <label className="flex items-center gap-1 text-white">
         <input
           type="checkbox"
           checked={hasFlag}
@@ -219,8 +219,9 @@ export default function GroupMembers() {
           onChange={(e: ChangeEvent<HTMLInputElement>) =>
             togglePermission(member.address, flag, e.target.checked)
           }
+          className="accent-blue-500 w-4 h-4"
         />
-        {label}
+        <span className="text-xs">{label}</span>
       </label>
     )
   }
@@ -244,7 +245,7 @@ export default function GroupMembers() {
   const iCanRemove = !!myInfo && (myInfo.perms & PERM_REMOVE_MEMBER) !== 0
 
   return (
-    <div style={{ maxWidth: 600, margin: '2rem auto' }}>
+    <div className="px-6 py-4 w-full max-w-7xl mx-auto">
       <h2>Manage Members & Permissions (Folder ID: {folderId})</h2>
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
@@ -271,7 +272,7 @@ export default function GroupMembers() {
           </button>
         </form>
       )}
-
+{/* 
       <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
         <thead>
           <tr>
@@ -305,7 +306,7 @@ export default function GroupMembers() {
               <td style={{ padding: '8px', textAlign: 'center' }}>
                 {renderCheckbox(member, '', PERM_MANAGE_PERMISSIONS)}
               </td>
-              {/* Remove Button (if I have REMOVE_MEMBER and not owner) */}
+              #Remove Button (if I have REMOVE_MEMBER and not owner) 
               <td style={{ padding: '8px', textAlign: 'center' }}>
                 {iCanRemove && !member.isOwner ? (
                   <button
@@ -331,6 +332,48 @@ export default function GroupMembers() {
           ))}
         </tbody>
       </table>
+       */}
+
+       <div className="space-y-4">
+  {members.map((member) => (
+    <div
+      key={member.address}
+      className="bg-neutral-900 text-white p-4 rounded-lg shadow flex flex-col md:flex-row md:items-center justify-between gap-4"
+    >
+      <div className="flex flex-col md:flex-row md:items-center gap-2">
+        <span className="font-mono text-sm text-white">{member.address}</span>
+        {member.isOwner && (
+          <span className="text-green-400 text-xs font-semibold">(Owner)</span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-3 items-center text-sm">
+        {renderCheckbox(member, "Add", PERM_ADD_MEMBER)}
+        {renderCheckbox(member, "Remove", PERM_REMOVE_MEMBER)}
+        {renderCheckbox(member, "Upload", PERM_UPLOAD)}
+        {renderCheckbox(member, "Delete", PERM_DELETE)}
+        {renderCheckbox(member, "Manage", PERM_MANAGE_PERMISSIONS)}
+
+        {iCanRemove && !member.isOwner ? (
+          <button
+            onClick={() => handleRemove(member.address)}
+            disabled={updating[member.address]}
+            className={`text-xs px-3 py-1 rounded transition ${
+              updating[member.address]
+                ? "bg-red-300 text-white cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-500 text-white"
+            }`}
+          >
+            {updating[member.address] ? "Removing…" : "Remove"}
+          </button>
+        ) : (
+          <span className="text-gray-500 text-xs">—</span>
+        )}
+      </div>
+    </div>
+  ))}
+</div>
+
     </div>
   )
 }
