@@ -101,33 +101,31 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
       if (web3 && userAddress) {
-        checkRegistration().then((registered) => {
-          setIsRegistered(registered)
-        })
+        // run our helper and store the result
+        checkRegistration().then(setIsRegistered)
       } else {
-        // No wallet or no address → treat as “not registered yet”
-        setIsRegistered(null)
+        // no wallet → clear to `null` (loading)
+      setIsRegistered(null)
       }
     }, [web3, userAddress])
 
     async function checkRegistration(): Promise<boolean> {
-      if (!web3 || !userAddress) return false
+      if (!web3 || !userAddress) {
+        setIsRegistered(null)
+        return false
+      }
 
       try {
-        const ctr = new web3.eth.Contract(
-          FILEVAULT_ABI,
-          CONTRACT_ADDRESS
-        )
-        // encryptionKeys is a public mapping(address => string) on your contract:
+        const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
         const existingKey: string = await ctr.methods
           .encryptionKeys(userAddress)
           .call({ from: userAddress })
-        return existingKey.length > 0
+        const registered = existingKey.length > 0
+        setIsRegistered(registered)      // 👈 update context state here
+        return registered
       } catch (err) {
-        console.error(
-          'Error checking encryption key registration:',
-          err
-        )
+        console.error('Error checking encryption key registration:', err)
+        setIsRegistered(false)
         return false
       }
     }
@@ -139,5 +137,3 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
     </Web3Ctx.Provider>
   )
 }
-
-

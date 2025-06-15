@@ -142,8 +142,6 @@ contract Storage {
             emit FolderKeyWrapped(folderId, m);
         }
 
-        userFolders[msg.sender].push(folderId);
-        userFolderIndex[msg.sender][folderId] = userFolders[msg.sender].length - 1;
 
         emit FolderCreated(folderId, msg.sender, name);
         return folderId;
@@ -200,6 +198,11 @@ contract Storage {
 
         // Folder owner has full rights including granting/removing MANAGE
         if (msg.sender == f.folderOwner) {
+
+            if ((perms & PERM_MANAGE_PERMISSIONS) != 0) {
+                perms |= (PERM_UPLOAD | PERM_DELETE);
+            }
+
             permissions[folderId][member] = perms;
             emit PermissionsUpdated(folderId, member, perms);
             return;
@@ -211,8 +214,8 @@ contract Storage {
         // Cannot assign/revoke MANAGE to others
         uint8 allowedPerms = PERM_UPLOAD | PERM_DELETE;
         if ((perms & ~allowedPerms) != 0) {
-        revert OnlyUploadDeletePermissions();
-    }
+            revert OnlyUploadDeletePermissions();
+        }
 
         permissions[folderId][member] = perms;
         emit PermissionsUpdated(folderId, member, perms);
@@ -220,12 +223,8 @@ contract Storage {
 
     /// @notice Return the permission bitmask for `member` in `folderId`
     function getMemberPermissions(uint256 folderId, address member) external view returns (uint8){
-        if (
-            msg.sender != folders[folderId].folderOwner &&
-            (permissions[folderId][msg.sender] & PERM_MANAGE_PERMISSIONS) == 0
-        ) {
-            revert NotAuthorized();
-        }
+        Folder storage f = folders[folderId];
+        if(!f.isMember[msg.sender]) revert NotAMember();
         return permissions[folderId][member];
     }
 
@@ -418,14 +417,13 @@ contract Storage {
         uint256[] storage fileIds = folderFiles[folderId];
         for (uint i = 0; i < fileIds.length; i++) {
             delete files[folderId][fileIds[i]];
-            unchecked { i++; }
         }
         delete folderFiles[folderId];
 
-        uint256 memberCount = f.members.length;
-        for (uint i = 0; i < memberCount; ) {
-            address m = f.members[i];
+        address[] memory membersSnapshot = f.members;
 
+        for (uint i = 0; i < membersSnapshot.length; i++) {
+            address m =  membersSnapshot[i];
             // O(1) remove from userFolders
             _removeUserFolder(m, folderId);
 
@@ -436,15 +434,10 @@ contract Storage {
             delete permissions[folderId][m];
             delete f.encryptedFolderKey[m];
             f.isMember[m] = false;
-
-            unchecked { i++; }
         }
 
-        _removeUserFolder(f.folderOwner, folderId);
-
-        // Delete folder metadata
-        delete folders[folderId];
         
+        delete folders[folderId];
     }
 
     /// @notice Upload a personal file (no folder required)

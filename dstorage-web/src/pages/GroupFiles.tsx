@@ -6,7 +6,7 @@ import { FILEVAULT_ABI } from '../contracts/abi'
 import { CONTRACT_ADDRESS } from '../contracts/address'
 import { uploadFolderFile, downloadFolderFile } from '../ipfs/ipfsServices'
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
-import { Download, Trash2, Folder, FileText, Upload ,Users} from "lucide-react"
+import { Trash2, Upload ,Users} from "lucide-react"
 import toast from "react-hot-toast"
 
 interface FileMeta {
@@ -16,19 +16,74 @@ interface FileMeta {
   uploader: string
 }
 
+// bit-flags must match your Solidity constants:
+const PERM_UPLOAD = 1 << 1   // 0b010  => 2
+const PERM_DELETE = 1 << 2   // 0b100  => 4
+
 export default function GroupFiles() {
   const { id } = useParams<{ id: string }>()
   const folderId = Number(id)
   const { web3, userAddress, ipfsClient } = useWeb3()
   const [files, setFiles] = useState<FileMeta[]>([])
   const [folderName, setFolderName] = useState<string>('')
+  const [folderOwner, setFolderOwner] = useState<string>("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)  
   const navigate = useNavigate()
+  const [isMember, setIsMember] = useState<boolean | null>(null)
+  const [perms, setPerms] = useState<number>(0)
 
   useEffect(() => {
-    if (web3 && userAddress) loadGroupFiles()
+    if (web3 && userAddress) loadGroupFiles(); loadOwner();
   }, [web3, userAddress, id])
+
+  useEffect(() => {
+    if (!web3 || !userAddress) return
+
+    (async () => {
+      const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
+
+      let members: string[];
+      try {
+        members = await ctr.methods
+          .getFolderMembers(folderId)
+          .call({ from: userAddress });
+      } catch (e) {
+        console.error("membership check failed", e);
+        toast.error("Unable to verify access");
+        navigate("/personal-folders");
+        return;
+      }
+
+      const lower = members.map((a) => a.toLowerCase())
+      if (!lower.includes(userAddress.toLowerCase())) {
+        toast.error("Forbidden")
+        navigate("/in/groups")
+        return
+      } 
+
+      setIsMember(true)
+      loadGroupFiles()       
+          
+    })();
+  }, [web3, userAddress, folderId])
+
+  useEffect(() => {
+    if (!web3 || !userAddress) return
+    const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+
+    ;(async () => {
+      try {
+        // Web3’s .call() *does* return a promise at runtime, but TS doesn’t know it.
+        const p: string = await ctr.methods
+          .myPermissions(folderId)
+          .call({ from: userAddress })
+        setPerms(Number(p))
+      } catch (e) {
+        console.error(e)
+      }
+    })()
+  }, [web3, userAddress, folderId])
 
   async function loadGroupFiles() {
     const ctr = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
@@ -56,6 +111,18 @@ export default function GroupFiles() {
       })
     )
     setFiles(metas)
+  }
+
+   async function loadOwner() {
+    const ctr = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+    try {
+      const ownerOnChain: string = await ctr.methods
+        .getFolderOwner(folderId)
+        .call({ from: userAddress })
+      setFolderOwner(ownerOnChain.toLowerCase())
+    } catch (e) {
+      console.error("couldn't fetch owner", e)
+    }
   }
 
   const handleUpload = async (e: FormEvent) => {
@@ -116,69 +183,115 @@ export default function GroupFiles() {
       }
     }
   
-    // handle file change
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.[0]) setSelectedFile(e.target.files[0]);
-    };
+    const deleteFile = async (folderId: number, fileId: number) => {
+      if (!web3 || !userAddress) {
+        toast.error("Wallet not connected");
+        return;
+      }
 
-    function deleteFile(cid: string) {
-      toast("File deleted (mock): " + cid)
+      const toastId = toast.loading("Deleting file…");
+      const contract = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
+
+      try {
+        // 1) call the on-chain deleteFile(uint256 folderId, uint256 fileId)
+        await contract.methods
+          .deleteFile(folderId, fileId)
+          .send({ from: userAddress });
+
+        // 2) success toast
+        toast.success("File deleted");
+        toast.dismiss(toastId);
+
+        loadGroupFiles();
+
+      } catch (err: any) {
+        console.error("Delete failed", err);
+        toast.error("Delete failed: " + err.message);
+        toast.dismiss(toastId);
+      }
+    }
+
+    const handleDeleteFolder = async () => {
+      if (!web3 || !userAddress) {
+        toast.error("Wallet not connected")
+      return
+      }
+
+      const t = toast.loading("Deleting folder…")
+      const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+      try {
+        await ctr.methods
+            .deleteFolder(folderId)
+            .send({ from: userAddress })
+
+          toast.success("Folder deleted")
+          toast.dismiss(t)
+          // redirect back to personal folders
+          navigate("/in/groups")
+      }catch (err: any) {
+          console.error("Folder deletion failed", err)
+          toast.error("Delete folder failed: " + err.message)
+          toast.dismiss(t)
+      }
+    }
+
+    if (isMember === null) {
+      // still checking
+      return <div>Checking access…</div>
     }
 
   if (!id) return <p>Invalid group folder</p>
   return (
     <div className="px-6 py-4 w-full max-w-7xl mx-auto">
-      {/* <h2>{folderName}</h2>
-      <button onClick={() => navigate(`/in/groups/${folderId}/members`)}>
-      Manage Members & Permissions
-      </button>
-      <form onSubmit={handleUpload} style={{ marginBottom: 16 }}>
-        <input
-          type="file"
-          onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
-        />
-        <button type="submit" disabled={!selectedFile}>
-          Upload File
-        </button>
-      </form> */}
 
         <div className="w-full flex items-center gap-4 mb-6">
           <h1 className="text-3xl font-bold text-white">{folderName}</h1>
 
-          <Dialog>
-            <DialogTrigger asChild>
-              <button className="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded flex items-center gap-2">
-                <Upload size={18} /> Upload
-              </button>
-            </DialogTrigger>
-            <DialogContent className="bg-neutral-800 text-white max-w-md rounded">
-              <h2 className="text-lg font-semibold mb-4">Upload a File</h2>
-              <div
-                className="border-2 border-dashed p-6 text-center rounded cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-                onDrop={handleDrop}
-                onDragOver={(e) => e.preventDefault()}
-              >
-                {selectedFile ? (
-                  <p className="font-semibold">{selectedFile.name}</p>
-                ) : (
-                  <p>Click or drag file here</p>
-                )}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-              </div>
-              <button
-                onClick={handleUpload}
-                className="mt-4 w-full bg-green-600 text-white py-2 rounded"
-              >
-                Upload
-              </button>
-            </DialogContent>
-          </Dialog>
+          {userAddress?.toLowerCase() === folderOwner && (
+            <button
+              onClick={handleDeleteFolder}
+              className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded flex items-center gap-2"
+            >
+              <Trash2 size={18} /> Delete Folder
+            </button>
+          )}
+
+          { (perms & PERM_UPLOAD) !== 0 && (  
+            <Dialog>
+              <DialogTrigger asChild>
+                <button className="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded flex items-center gap-2">
+                  <Upload size={18} /> Upload
+                </button>
+              </DialogTrigger>
+              <DialogContent className="bg-neutral-800 text-white max-w-md rounded">
+                <h2 className="text-lg font-semibold mb-4">Upload a File</h2>
+                <div
+                  className="border-2 border-dashed p-6 text-center rounded cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleDrop}
+                  onDragOver={(e) => e.preventDefault()}
+                >
+                  {selectedFile ? (
+                    <p className="font-semibold">{selectedFile.name}</p>
+                  ) : (
+                    <p>Click or drag file here</p>
+                  )}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                </div>
+                <button
+                  onClick={handleUpload}
+                  className="mt-4 w-full bg-green-600 text-white py-2 rounded"
+                >
+                  Upload
+                </button>
+              </DialogContent>
+            </Dialog>
+          )}
 
           <button 
           className="bg-neutral-800 hover:bg-neutral-700 text-white px-4 py-2 rounded flex items-center gap-2" 
@@ -187,29 +300,16 @@ export default function GroupFiles() {
           </button>
         </div>
 
-      {/* <ul>
-        {files.map(f => (
-          <li key={f.fileId} style={{ marginBottom: 8 }}>
-            {f.fileName} Uploader: {f.uploader}
-            <button
-              style={{ marginLeft: 12 }}
-              onClick={() => handleDownload(f)}
-            >
-              Download & Decrypt
-            </button>
-          </li>
-        ))}
-      </ul> */}
-
       {/* File Table */}
       <div className="w-full overflow-x-auto rounded-lg">
         <table className="w-full text-left border-collapse text-white bg-black">
-          <thead className="bg-gray-800 text-white">
+          <thead className=" text-white">
             <tr>
               <th className="text-xl p-3 font-semibold border-b border-white text-left">Name</th>
               <th className="text-xl p-3 font-semibold border-b border-white text-left">CID</th>
-              <th className="text-xl p-3 font-semibold border-b border-white text-left">Uploader</th>
-              <th className="text-xl p-3 font-semibold border-b border-white text-right">Actions</th>
+              <th className="text-xl p-3 font-semibold border-b border-white text-left">Uploader</th>  
+              <th className={`text-xl p-3 font-semibold border-b border-white text-right
+                ${ (perms & PERM_DELETE) !== 0 ? '' : 'invisible' }`}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -228,9 +328,11 @@ export default function GroupFiles() {
                   {file.uploader}
                 </td>
                 <td className="text-xl p-3 text-right space-x-2 align-middle">
-                  <button onClick={() => deleteFile(file.cid)}>
-                    <Trash2 className="w-5 h-5 text-red-500 hover:scale-110 transition" />
-                  </button>
+                  { (perms & PERM_DELETE) !== 0 && (
+                    <button onClick={() => deleteFile(folderId,file.fileId)}>
+                      <Trash2 className="w-5 h-5 text-red-500 hover:scale-110 transition" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

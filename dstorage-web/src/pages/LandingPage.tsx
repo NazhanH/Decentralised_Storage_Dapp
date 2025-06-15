@@ -1,6 +1,5 @@
 // src/pages/LandingPage.tsx
-import React, {createContext,
-  useContext, useEffect, useState } from 'react'
+import {useEffect, useState } from 'react'
 import { useWeb3} from '../context/Web3Context'
 import { FILEVAULT_ABI } from '../contracts/abi'
 import { CONTRACT_ADDRESS } from '../contracts/address'
@@ -53,7 +52,7 @@ export default function LandingPage() {
       console.error('Registration check failed', err)
       setError('Failed to check registration. Please try again.')
       toast.dismiss(toastId) // clears the loading toast
-      toast.error("Failed to check registration") // or other success messages
+      toast.error(error) // or other success messages
     }
   }
 
@@ -74,10 +73,11 @@ export default function LandingPage() {
         .registerEncryptionKey(pubKey)
         .send({ from: userAddress })
 
-      // 3) Mark as registered and stop loading
-      setIsRegistered(true)
+      // 3) force a re-check of on‐chain state so context.isRegistered flips true
+      await checkRegistration()
       toast.dismiss(loadingToast) // clears the loading toast
       toast.success("Registered successfully!") 
+      window.location.reload()
     } catch (err: any) {
       console.error('Registration failed', err)
       if (err.code === 4001) {

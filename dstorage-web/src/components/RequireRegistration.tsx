@@ -23,7 +23,7 @@ export default function RequireRegistration({
     return <p style={{ textAlign: 'center', marginTop: '2rem' }}>Checking registration…</p>
   }
 
-  if (isRegistered === false) {
+  if (!isRegistered) {
     // not registered → send them to /register
     return <Navigate to="/" replace />
   }

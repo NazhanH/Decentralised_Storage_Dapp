@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Download, Trash2, Folder, FileText, Upload } from "lucide-react"
+import {Trash2, Upload} from "lucide-react"
 import toast from "react-hot-toast"
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { FILEVAULT_ABI } from "../contracts/abi";
@@ -16,13 +16,7 @@ interface FileMeta {
   cid: string;
 }
 
-const dummyFiles: FileMeta[] = [
-  { fileId:'01' ,fileName: "1st ESSAY.docx", cid: "abc" },
-  { fileId:'02' ,fileName: "something.mp4", cid: "def" },
-]
-
 export default function PersonalFiles() {
-  const [files, setFiles] = useState<FileMeta[]>(dummyFiles)
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<FileMeta[]>([]);
   const { web3, userAddress, ipfsClient } = useWeb3();
@@ -49,11 +43,6 @@ export default function PersonalFiles() {
       setSelectedFile(e.target.files[0])
     }
   }
-
-  // handle file change
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) setSelectedFile(e.target.files[0]);
-  };
 
   // fetch personal file IDs and metadata
   const fetchMyFiles = async () => {
@@ -145,9 +134,32 @@ export default function PersonalFiles() {
     }
   };
 
-  function deleteFile(cid: string) {
-    toast("File deleted (mock): " + cid)
-  }
+  const handleDelete = async (fileId: string) => {
+    if (!web3 || !userAddress) {
+      toast.error("Wallet not connected");
+      return;
+    }
+
+    const toastId = toast.loading("Deleting file...");
+    const contract = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
+    try {
+      // call the solidity deletePersonalFile(uint256)
+      await contract.methods
+        .deletePersonalFile(fileId)
+        .send({ from: userAddress });
+
+      toast.success("File deleted");
+      toast.dismiss(toastId);
+
+      // remove it locally
+      setUploadedFiles((files) =>
+        files.filter((f) => f.fileId !== fileId)
+      );
+    } catch (err: any) {
+      console.error("Delete failed", err);
+      toast.error("Delete failed: " + err.message);
+    }
+  };
 
   return (
      <div className="px-6 py-4 w-full max-w-7xl mx-auto">
@@ -193,7 +205,7 @@ export default function PersonalFiles() {
       {/* File Table */}
       <div className="w-full overflow-x-auto rounded-lg">
         <table className="w-full text-left border-collapse text-white bg-black">
-          <thead className="bg-gray-800 text-white">
+          <thead className=" text-white">
             <tr>
               <th className="text-xl p-3 font-semibold border-b border-white text-left">Name</th>
               <th className="text-xl p-3 font-semibold border-b border-white text-left">CID</th>
@@ -213,7 +225,7 @@ export default function PersonalFiles() {
                   {file.cid}
                 </td>
                 <td className="text-xl p-3 text-right space-x-2 align-middle">
-                  <button onClick={() => deleteFile(file.cid)}>
+                  <button onClick={() => handleDelete(file.fileId)} className="text-red-500 hover:text-red-700">
                     <Trash2 className="w-5 h-5 text-red-500 hover:scale-110 transition" />
                   </button>
                 </td>

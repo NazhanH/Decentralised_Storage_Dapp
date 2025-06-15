@@ -4,7 +4,6 @@ import { FILEVAULT_ABI } from '../contracts/abi'
 import { CONTRACT_ADDRESS } from '../contracts/address'
 import { useWeb3 } from '../context/Web3Context'
 import { wrapKeyFor } from '../crypto'
-import { NavLink } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { Plus } from "lucide-react"
@@ -53,6 +52,8 @@ export default function PersonalFolders() {
       folderId: Number(id),
       folderName: names[idx]
     }))
+
+    list.sort((a, b) => a.folderId - b.folderId)
     setFolders(list)
   }
 
@@ -71,7 +72,6 @@ export default function PersonalFolders() {
     
     const wrappedHex =await wrapKeyFor(pubKey, keyBytes)
 
-    //const envelopeHex = web3.utils.utf8ToHex(wrappedJson)
       
     const contract = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
     await contract.methods
@@ -128,25 +128,6 @@ return (
           </DialogContent>
         </Dialog>
       </div>
-      {/* <form onSubmit={onCreate} style={{ marginBottom: '1rem' }}>
-        <input
-          type="text"
-          placeholder="Folder name"
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          style={{ marginRight: 8 }}
-        />
-        <button type="submit">Create Folder</button>
-      </form> */}
-      {/* <ul>
-        {folders.map(f => (
-          <li key={f.folderId} style={{ marginBottom: 6 }} className="folder-link">
-            <NavLink to={`/in/folders/${f.folderId}`} >
-                📁 {f.folderName}
-            </NavLink>
-          </li>
-        ))}
-      </ul> */}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {folders.map((folder) => (

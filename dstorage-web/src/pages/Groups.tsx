@@ -4,7 +4,6 @@ import { FILEVAULT_ABI } from '../contracts/abi'
 import { CONTRACT_ADDRESS } from '../contracts/address'
 import { useWeb3 } from '../context/Web3Context'
 import { wrapKeyFor } from '../crypto'
-import { NavLink } from 'react-router-dom'
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import toast from "react-hot-toast"
 import { useNavigate } from 'react-router-dom'
@@ -15,6 +14,7 @@ declare let window: any
 interface GroupMeta {
   folderName: string
   folderId: number
+  folderOwner: string
 }
 
 export default function Groups() {
@@ -47,23 +47,30 @@ export default function Groups() {
 
     const idsRaw = raw.folderIds ?? raw[0]
     const namesRaw = raw.folderNames ?? raw[1]
+    const ownersRaw = raw.folderOwners ?? raw[2]
     const ids: string[] = Array.isArray(idsRaw)
       ? idsRaw
       : Object.values(idsRaw).map((v: any) => v.toString())
     const names: string[] = Array.isArray(namesRaw)
       ? namesRaw
       : Object.values(namesRaw).map((v: any) => v.toString())
+    const owners: string[] = Array.isArray(ownersRaw)
+      ? ownersRaw
+      : Object.values(ownersRaw).map((v: any) => v.toString())
 
     const list = ids.map((id, idx) => ({
       folderId: Number(id),
-      folderName: names[idx]
+      folderName: names[idx],
+      folderOwner: owners[idx].toLowerCase(),
     }))
+
+    list.sort((a, b) => a.folderId - b.folderId)
     setGroups(list)
   }
 
   async function onCreate(e: FormEvent) {
     e.preventDefault()
-    if (!web3 || !userAddress || !newName || membersList.length === 0) return
+    if (!web3 || !userAddress || !newName || membersList.length === 1) return
 
     setLoading(true)
     try{
@@ -92,7 +99,8 @@ export default function Groups() {
       toast.success("Group created!")
       setDialogOpen(false)
       setNewName("")
-      setMembersInput(userAddress)
+      setMembersInput("")
+      setMembersList([userAddress])
       await loadGroups()
       setLoading(false)
 
@@ -145,7 +153,13 @@ export default function Groups() {
                   type="button"
                   onClick={() => {
                     if (membersInput.trim()) {
-                      setMembersList(prev => [...prev, membersInput.trim()])
+                      const candidate = membersInput.trim().toLowerCase()
+                      // avoid dupes
+                      if (membersList.some(m => m.toLowerCase() === candidate)) {
+                        toast.error("That address is already added")
+                      } else {
+                        setMembersList(prev => [...prev, membersInput.trim()])
+                      }
                       setMembersInput("")
                     }
                   }}
@@ -182,6 +196,7 @@ export default function Groups() {
                     setDialogOpen(false);
                     setNewName("");
                     setMembersList([userAddress]);
+                    setMembersInput("");
                   }}
                   className="px-4 py-2 rounded bg-neutral-700 hover:bg-neutral-600"
                 >
@@ -200,15 +215,6 @@ export default function Groups() {
         </Dialog>
       </div>
 
-
-      {/* <ul>
-        {groups.map(f => (
-          <li key={f.folderId} style={{ marginBottom: 6 }}>
-            <NavLink to={`/in/groups/${f.folderId}`}>📁 {f.folderName}</NavLink>
-          </li>
-        ))}
-      </ul> */}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {groups.map((group) => (
           <div
@@ -220,7 +226,7 @@ export default function Groups() {
 
             <div className="rounded-b-md bg-gray-700 group-hover:bg-sky-700 p-4 shadow-md">
               <h3 className="text-xl text-white font-semibold mb-2">{group.folderName}</h3>
-              {/* <h4 className="text-xl text-white font-semibold mb-2">{group.folderOwner}</h4> */}
+              <p className="text-sm text-white break-words">{group.folderOwner}</p>
             </div>
           </div>
         ))}

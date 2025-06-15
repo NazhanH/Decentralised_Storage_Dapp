@@ -1,17 +1,17 @@
 // src/pages/GroupMembers.tsx
-import React, { useEffect, useState, ChangeEvent, FormEvent } from 'react'
+import { useEffect, useState, ChangeEvent, FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { useWeb3 } from '../context/Web3Context'
 import { FILEVAULT_ABI } from '../contracts/abi'
 import { CONTRACT_ADDRESS } from '../contracts/address'
-import { wrapKeyFor, unwrapKeyFor } from '../crypto'
+import { wrapKeyFor} from '../crypto'
 
 // Permission bit‐flags (must match those in your Solidity contract)
-const PERM_ADD_MEMBER         = 1 << 0  // 0b00001
-const PERM_REMOVE_MEMBER      = 1 << 1  // 0b00010
-const PERM_UPLOAD             = 1 << 2  // 0b00100
-const PERM_DELETE             = 1 << 3  // 0b01000
-const PERM_MANAGE_PERMISSIONS = 1 << 4  // 0b10000
+const PERM_MANAGE_PERMISSIONS = 1 << 0  // 0b00001
+const PERM_UPLOAD             = 1 << 1  // 0b00010
+const PERM_DELETE             = 1 << 2  // 0b00100
+
+
 
 interface MemberInfo {
   address: string
@@ -109,6 +109,8 @@ export default function GroupMembers() {
           m.address === memberAddr ? { ...m, perms: newMask } : m
         )
       )
+
+      loadMembers() // Reload to ensure consistency
     } catch (err: any) {
       console.error('Failed to update permissions', err)
       setError(err.message || 'Permission update failed.')
@@ -205,10 +207,11 @@ export default function GroupMembers() {
   function renderCheckbox(
     member: MemberInfo,
     label: string,
-    flag: number
+    flag: number,
+    disabledOverride = false
   ) {
     const hasFlag = (member.perms & flag) !== 0
-    const disabled = member.isOwner || updating[member.address] || loading
+    const disabled = member.isOwner || disabledOverride//updating[member.address] || loading
 
     return (
       <label className="flex items-center gap-1 text-white">
@@ -241,16 +244,17 @@ export default function GroupMembers() {
   const myInfo = members.find(
     (m) => m.address.toLowerCase() === userAddress.toLowerCase()
   )
-  const iCanAdd = !!myInfo && (myInfo.perms & PERM_ADD_MEMBER) !== 0
-  const iCanRemove = !!myInfo && (myInfo.perms & PERM_REMOVE_MEMBER) !== 0
+  const iCanManage = !!myInfo && (myInfo.perms & PERM_MANAGE_PERMISSIONS) !== 0
 
   return (
     <div className="px-6 py-4 w-full max-w-7xl mx-auto">
-      <h2 className='text-3xl font-bold text-white' >Manage Members & Permissions (Folder ID: {folderId})</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <h2 className='text-3xl font-bold text-white'>
+        Folder Members & Permissions
+      </h2>
 
-      {/* Add Member Form (only if I have ADD_MEMBER) */}
-      {iCanAdd && (
+      {/* Always show members list, even if you’re not a manager */}
+      {/* Add Member Form (only if I have MANAGE permission) */}
+      {iCanManage && (
         <form
           onSubmit={handleAdd}
           style={{
@@ -275,45 +279,49 @@ export default function GroupMembers() {
       )}
 
       <div className="space-y-4">
-        {members.map((member) => (
-          <div
-            key={member.address}
-            className="bg-neutral-900 text-white p-4 rounded-lg shadow flex flex-col md:flex-row md:items-center justify-between gap-4"
-          >
-            <div className="flex flex-col md:flex-row md:items-center gap-2">
-              <span className="font-mono text-sm text-white">{member.address}</span>
-              {member.isOwner && (
-                <span className="text-green-400 text-xs font-semibold">(Owner)</span>
-              )}
-            </div>
+        {members.map((member) => {
+          // if they’re not a manager, we’ll still render checkboxes but keep them disabled
+          const disabledAll = !iCanManage
 
-            <div className="flex flex-wrap gap-3 items-center text-sm">
-              {renderCheckbox(member, "Add", PERM_ADD_MEMBER)}
-              {renderCheckbox(member, "Remove", PERM_REMOVE_MEMBER)}
-              {renderCheckbox(member, "Upload", PERM_UPLOAD)}
-              {renderCheckbox(member, "Delete", PERM_DELETE)}
-              {renderCheckbox(member, "Manage", PERM_MANAGE_PERMISSIONS)}
+          return (
+            <div
+              key={member.address}
+              className="bg-neutral-900 text-white p-4 rounded-lg shadow flex flex-col md:flex-row md:items-center justify-between gap-4"
+            >
+              <div>
+                <code className="font-mono">{member.address}</code>
+                {member.isOwner && (
+                  <span className="ml-2 text-green-400">(Owner)</span>
+                )}
+              </div>
 
-              {iCanRemove && !member.isOwner ? (
-                <button
-                  onClick={() => handleRemove(member.address)}
-                  disabled={updating[member.address]}
-                  className={`text-xs px-3 py-1 rounded transition ${
-                    updating[member.address]
-                      ? "bg-red-300 text-white cursor-not-allowed"
-                      : "bg-red-600 hover:bg-red-500 text-white"
-                  }`}
-                >
-                  {updating[member.address] ? "Removing…" : "Remove"}
-                </button>
-              ) : (
-                <span className="text-gray-500 text-xs">—</span>
-              )}
+              <div className="flex flex-wrap gap-4 items-center">
+                {/* renderCheckbox already disables the input if `disabled` is true */}
+                {renderCheckbox(
+                  member,
+                  "Upload",
+                  PERM_UPLOAD,
+                  /* pass down whether toggling is allowed */
+                  disabledAll
+                )}
+                {renderCheckbox(member, "Delete", PERM_DELETE, disabledAll)}
+                {renderCheckbox(member, "Manage", PERM_MANAGE_PERMISSIONS, disabledAll)}
+
+                {/* Only show “Remove” to people who can manage (and only on non-owners) */}
+                {iCanManage && !member.isOwner ? (
+                  <button
+                    onClick={() => handleRemove(member.address)}
+                    disabled={updating[member.address]}
+                    className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded"
+                  >
+                    {updating[member.address] ? "Removing…" : "Remove"}
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
-
     </div>
   )
 }
