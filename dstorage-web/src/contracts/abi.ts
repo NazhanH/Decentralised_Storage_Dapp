@@ -1,9 +1,84 @@
 // src/contracts/abi.ts
 export const FILEVAULT_ABI = [
-     {
+    {
       "inputs": [],
       "stateMutability": "nonpayable",
       "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "AlreadyMember",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "CannotChangeOwnPermissions",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "CannotRemoveManager",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "CannotRemoveSelf",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "FileNotAvailable",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "KeysCountMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MemberLimitReached",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MembersKeysMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NoPermission",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotAMember",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotAuthorized",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotContractOwner",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyFolderOwner",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OnlyUploadDeletePermissions",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "OwnerCannotLeave",
+      "type": "error"
     },
     {
       "anonymous": false,
@@ -274,6 +349,26 @@ export const FILEVAULT_ABI = [
       "inputs": [
         {
           "internalType": "uint256",
+          "name": "folderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "deleteFolder",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "deleteMyAccount",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
           "name": "fileId",
           "type": "uint256"
         }
@@ -489,6 +584,11 @@ export const FILEVAULT_ABI = [
           "internalType": "string[]",
           "name": "folderNames",
           "type": "string[]"
+        },
+        {
+          "internalType": "address[]",
+          "name": "folderOwners",
+          "type": "address[]"
         }
       ],
       "stateMutability": "view",
@@ -571,6 +671,19 @@ export const FILEVAULT_ABI = [
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "folderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "leaveFolder",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
