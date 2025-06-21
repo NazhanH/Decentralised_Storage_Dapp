@@ -25,10 +25,9 @@ contract Storage {
     uint8 public constant MAX_MEMBERS = 255;
 
     // Permission bit-flags
-    uint8 constant PERM_MANAGE_PERMISSIONS= 1 << 0;
-    uint8 constant PERM_UPLOAD            = 1 << 1;
-    uint8 constant PERM_DELETE            = 1 << 2;
-
+    uint8 constant PERM_MANAGE_PERMISSIONS = 1 << 0;
+    uint8 constant PERM_UPLOAD = 1 << 1;
+    uint8 constant PERM_DELETE = 1 << 2;
 
     // Counters
     uint256 public folderCount;
@@ -51,36 +50,50 @@ contract Storage {
         mapping(address => bytes) encryptedFolderKey;
     }
 
-
-
-
     // Folder mappings
-    mapping(uint256 => Folder)                        private folders;
-    mapping(uint256 => mapping(address => uint256))   private folderMemberIndex;
-    mapping(uint256 => mapping(address => uint8))     private permissions;
-    mapping(uint256 => mapping(uint256 => File))      private files;
-    mapping(uint256 => uint256[])                     private folderFiles;
+    mapping(uint256 => Folder) private folders;
+    mapping(uint256 => mapping(address => uint256)) private folderMemberIndex;
+    mapping(uint256 => mapping(address => uint8)) private permissions;
+    mapping(uint256 => mapping(uint256 => File)) private files;
+    mapping(uint256 => uint256[]) private folderFiles;
 
-    mapping(address => uint256[])                     private userFolders;
-    mapping(address => mapping(uint256 => uint256))   private userFolderIndex;
+    mapping(address => uint256[]) private userFolders;
+    mapping(address => mapping(uint256 => uint256)) private userFolderIndex;
 
     // Personal file mappings
-    mapping(address => mapping(uint256 => File))      private personalFiles;
-    mapping(address => uint256[])                     private personalFileIds;
-    mapping(address => uint256)                       private personalFileCount;
+    mapping(address => mapping(uint256 => File)) private personalFiles;
+    mapping(address => uint256[]) private personalFileIds;
+    mapping(address => uint256) private personalFileCount;
 
-    mapping(address=>string) public encryptionKeys;
-
+    mapping(address => string) public encryptionKeys;
 
     // ----- EVENTS -----
     event OwnerUpdated(address indexed newOwner);
-    event FolderCreated(uint256 indexed folderId, address indexed owner, string name);
+    event FolderCreated(
+        uint256 indexed folderId,
+        address indexed owner,
+        string name
+    );
     event MemberAdded(uint256 indexed folderId, address indexed member);
     event MemberRemoved(uint256 indexed folderId, address indexed member);
-    event PermissionsUpdated(uint256 indexed folderId, address indexed member, uint8 perms);
+    event PermissionsUpdated(
+        uint256 indexed folderId,
+        address indexed member,
+        uint8 perms
+    );
     event FolderKeyWrapped(uint256 indexed folderId, address indexed member);
-    event FileUploaded(uint256 indexed folderId, uint256 indexed fileId, address indexed uploader, string fileName, string cid);
-    event FileDeleted(uint256 indexed folderId, uint256 indexed fileId, address indexed deleter);
+    event FileUploaded(
+        uint256 indexed folderId,
+        uint256 indexed fileId,
+        address indexed uploader,
+        string fileName,
+        string cid
+    );
+    event FileDeleted(
+        uint256 indexed folderId,
+        uint256 indexed fileId,
+        address indexed deleter
+    );
 
     // ----- CONSTRUCTOR & OWNER LOGIC -----
     constructor() {
@@ -88,23 +101,22 @@ contract Storage {
     }
 
     function setOwner(address _owner) external {
-        if(msg.sender != owner) revert NotContractOwner();
+        if (msg.sender != owner) revert NotContractOwner();
         owner = _owner;
         emit OwnerUpdated(_owner);
     }
 
- // Modifiers
+    // Modifiers
     modifier onlyOwner() {
-        if(msg.sender != owner) revert NotContractOwner();
+        if (msg.sender != owner) revert NotContractOwner();
         _;
     }
 
     modifier hasPermission(uint256 folderId, uint8 perm) {
-        if(
-            permissions[folderId][msg.sender] & perm == 0) revert NoPermission();
+        if (permissions[folderId][msg.sender] & perm == 0)
+            revert NoPermission();
         _;
     }
-
 
     /// @notice Update contract owner
     function updateOwner(address _owner) external onlyOwner {
@@ -113,14 +125,19 @@ contract Storage {
     }
 
     /// @notice Create a new folder with initial members and their wrapped AES key
-    function createFolder( string calldata name, address[] calldata initialMembers, bytes[] calldata encryptedKeys) external returns (uint256) {
-        if(initialMembers.length != encryptedKeys.length) revert MembersKeysMismatch();
-        if(initialMembers.length > MAX_MEMBERS)revert MemberLimitReached();
+    function createFolder(
+        string calldata name,
+        address[] calldata initialMembers,
+        bytes[] calldata encryptedKeys
+    ) external returns (uint256) {
+        if (initialMembers.length != encryptedKeys.length)
+            revert MembersKeysMismatch();
+        if (initialMembers.length > MAX_MEMBERS) revert MemberLimitReached();
 
         uint256 folderId = folderCount++;
         Folder storage f = folders[folderId];
         f.folderOwner = msg.sender;
-        f.folderName  = name;
+        f.folderName = name;
 
         // Grant full perms to folder owner
         permissions[folderId][msg.sender] =
@@ -142,16 +159,19 @@ contract Storage {
             emit FolderKeyWrapped(folderId, m);
         }
 
-
         emit FolderCreated(folderId, msg.sender, name);
         return folderId;
     }
 
     /// @notice Add a member to a folder
-    function addMember( uint256 folderId, address newMember, bytes calldata encryptedKey) external hasPermission(folderId, PERM_MANAGE_PERMISSIONS) {
+    function addMember(
+        uint256 folderId,
+        address newMember,
+        bytes calldata encryptedKey
+    ) external hasPermission(folderId, PERM_MANAGE_PERMISSIONS) {
         Folder storage f = folders[folderId];
-        if(f.isMember[newMember]) revert AlreadyMember();
-        if(f.members.length > MAX_MEMBERS) revert MemberLimitReached();
+        if (f.isMember[newMember]) revert AlreadyMember();
+        if (f.members.length > MAX_MEMBERS) revert MemberLimitReached();
 
         f.members.push(newMember);
         folderMemberIndex[folderId][newMember] = f.members.length - 1;
@@ -159,24 +179,31 @@ contract Storage {
         f.encryptedFolderKey[newMember] = encryptedKey;
 
         userFolders[newMember].push(folderId);
-        userFolderIndex[newMember][folderId] = userFolders[newMember].length - 1;
+        userFolderIndex[newMember][folderId] =
+            userFolders[newMember].length -
+            1;
 
         emit MemberAdded(folderId, newMember);
         emit FolderKeyWrapped(folderId, newMember);
     }
 
     /// @notice Remove a member from a folder
-    function removeMember(uint256 folderId, address member) external hasPermission(folderId, PERM_MANAGE_PERMISSIONS){
+    function removeMember(
+        uint256 folderId,
+        address member
+    ) external hasPermission(folderId, PERM_MANAGE_PERMISSIONS) {
         Folder storage f = folders[folderId];
-        if(!f.isMember[member]) revert NotAMember();
-        if(msg.sender == member) revert CannotRemoveSelf();
+        if (!f.isMember[member]) revert NotAMember();
+        if (msg.sender == member) revert CannotRemoveSelf();
 
         bool isOwner = msg.sender == f.folderOwner;
 
         // If not the owner, cannot remove someone who also has MANAGE
         if (!isOwner) {
-            if ((permissions[folderId][member] & PERM_MANAGE_PERMISSIONS) != 0) {
-            revert CannotRemoveManager();
+            if (
+                (permissions[folderId][member] & PERM_MANAGE_PERMISSIONS) != 0
+            ) {
+                revert CannotRemoveManager();
             }
         }
 
@@ -192,13 +219,16 @@ contract Storage {
     }
 
     /// @notice Update a member's permissions
-    function setMemberPermissions( uint256 folderId, address member, uint8 perms) external hasPermission(folderId, PERM_MANAGE_PERMISSIONS) {
+    function setMemberPermissions(
+        uint256 folderId,
+        address member,
+        uint8 perms
+    ) external hasPermission(folderId, PERM_MANAGE_PERMISSIONS) {
         Folder storage f = folders[folderId];
-        if(!f.isMember[member])revert NotAMember();
+        if (!f.isMember[member]) revert NotAMember();
 
         // Folder owner has full rights including granting/removing MANAGE
         if (msg.sender == f.folderOwner) {
-
             if ((perms & PERM_MANAGE_PERMISSIONS) != 0) {
                 perms |= (PERM_UPLOAD | PERM_DELETE);
             }
@@ -209,7 +239,7 @@ contract Storage {
         }
 
         // Cannot change your own permissions
-        if(msg.sender == member) revert CannotChangeOwnPermissions();
+        if (msg.sender == member) revert CannotChangeOwnPermissions();
 
         // Cannot assign/revoke MANAGE to others
         uint8 allowedPerms = PERM_UPLOAD | PERM_DELETE;
@@ -222,21 +252,28 @@ contract Storage {
     }
 
     /// @notice Return the permission bitmask for `member` in `folderId`
-    function getMemberPermissions(uint256 folderId, address member) external view returns (uint8){
+    function getMemberPermissions(
+        uint256 folderId,
+        address member
+    ) external view returns (uint8) {
         Folder storage f = folders[folderId];
-        if(!f.isMember[msg.sender]) revert NotAMember();
+        if (!f.isMember[msg.sender]) revert NotAMember();
         return permissions[folderId][member];
     }
 
     /// @notice Return *your* permissions in a folder
-    function myPermissions(uint256 folderId) external view returns (uint8){
+    function myPermissions(uint256 folderId) external view returns (uint8) {
         return permissions[folderId][msg.sender];
     }
 
     /// @notice Rotate the folder AES key for all members
-    function rotateFolderKey( uint256 folderId, bytes[] calldata encryptedKeys) external hasPermission(folderId, PERM_MANAGE_PERMISSIONS) {
+    function rotateFolderKey(
+        uint256 folderId,
+        bytes[] calldata encryptedKeys
+    ) external hasPermission(folderId, PERM_MANAGE_PERMISSIONS) {
         Folder storage f = folders[folderId];
-        if(encryptedKeys.length != f.members.length) revert KeysCountMismatch();
+        if (encryptedKeys.length != f.members.length)
+            revert KeysCountMismatch();
 
         for (uint i = 0; i < f.members.length; i++) {
             address m = f.members[i];
@@ -246,7 +283,11 @@ contract Storage {
     }
 
     /// @notice Upload a file to a folder
-    function uploadFile(uint256 folderId, string calldata fileName, string calldata cid) external hasPermission(folderId, PERM_UPLOAD) returns (uint256) {
+    function uploadFile(
+        uint256 folderId,
+        string calldata fileName,
+        string calldata cid
+    ) external hasPermission(folderId, PERM_UPLOAD) returns (uint256) {
         uint256 fid = fileCount++;
         files[folderId][fid] = File(msg.sender, fileName, cid, true);
         folderFiles[folderId].push(fid);
@@ -255,9 +296,12 @@ contract Storage {
     }
 
     /// @notice Delete a file from a folder
-    function deleteFile(uint256 folderId, uint256 fileId)external hasPermission(folderId, PERM_DELETE){
+    function deleteFile(
+        uint256 folderId,
+        uint256 fileId
+    ) external hasPermission(folderId, PERM_DELETE) {
         File storage fe = files[folderId][fileId];
-        if(!fe.available) revert FileNotAvailable();
+        if (!fe.available) revert FileNotAvailable();
 
         delete files[folderId][fileId];
         uint256[] storage arr = folderFiles[folderId];
@@ -272,39 +316,57 @@ contract Storage {
     }
 
     /// @notice Fetch wrapped AES key for caller
-    function getEncryptedFolderKey(uint256 folderId)external view returns (bytes memory){
+    function getEncryptedFolderKey(
+        uint256 folderId
+    ) external view returns (bytes memory) {
         Folder storage f = folders[folderId];
-        if(!f.isMember[msg.sender]) revert NotAMember();
+        if (!f.isMember[msg.sender]) revert NotAMember();
         return f.encryptedFolderKey[msg.sender];
     }
 
     /// @notice get folder owner
-    function getFolderOwner(uint256 folderId) external view returns (address folderOwner){
+    function getFolderOwner(
+        uint256 folderId
+    ) external view returns (address folderOwner) {
         return folders[folderId].folderOwner;
     }
 
     /// @notice List members of a folder
-    function getFolderMembers(uint256 folderId) external view returns (address[] memory){
+    function getFolderMembers(
+        uint256 folderId
+    ) external view returns (address[] memory) {
         return folders[folderId].members;
     }
 
     /// @notice List file IDs in a folder
-    function getFolderFiles(uint256 folderId) external view returns (uint256[] memory){
+    function getFolderFiles(
+        uint256 folderId
+    ) external view returns (uint256[] memory) {
         return folderFiles[folderId];
     }
 
-    function getFolderFile( uint256 folderId, uint256 fileId) external view returns (address uploader, string memory fileName, string memory cid){
+    function getFolderFile(
+        uint256 folderId,
+        uint256 fileId
+    )
+        external
+        view
+        returns (address uploader, string memory fileName, string memory cid)
+    {
         File storage fe = files[folderId][fileId];
-        if(!fe.available) revert FileNotAvailable();
+        if (!fe.available) revert FileNotAvailable();
         return (fe.uploader, fe.fileName, fe.cid);
     }
 
-
     /// @notice Return all personal folder IDs and their names in one call
-    function getPersonalFolders() external view returns ( uint256[] memory folderIds, string[]  memory folderNames ){
+    function getPersonalFolders()
+        external
+        view
+        returns (uint256[] memory folderIds, string[] memory folderNames)
+    {
         uint256[] storage my = userFolders[msg.sender];
 
-        // 1️⃣ Count how many are solo
+        //Count how many are solo
         uint256 soloCount;
         for (uint256 i = 0; i < my.length; i++) {
             uint256 fid = my[i];
@@ -313,14 +375,14 @@ contract Storage {
             }
         }
 
-        // 2️⃣ Build the arrays
-        folderIds   = new uint256[](soloCount);
+        // Build the arrays
+        folderIds = new uint256[](soloCount);
         folderNames = new string[](soloCount);
         uint256 idx;
         for (uint256 i = 0; i < my.length; i++) {
             uint256 fid = my[i];
             if (folders[fid].members.length == 1) {
-                folderIds[idx]   = fid;
+                folderIds[idx] = fid;
                 folderNames[idx] = folders[fid].folderName;
                 idx++;
             }
@@ -328,10 +390,18 @@ contract Storage {
     }
 
     /// @notice List all folder IDs where caller is a member of a group (members>1)
-    function getGroupFolders() external view returns ( uint256[] memory folderIds, string[]  memory folderNames, address[] memory folderOwners){
+    function getGroupFolders()
+        external
+        view
+        returns (
+            uint256[] memory folderIds,
+            string[] memory folderNames,
+            address[] memory folderOwners
+        )
+    {
         uint256[] storage my = userFolders[msg.sender];
 
-        // 1️⃣ Count multi-member folders
+        // Count multi-member folders
         uint256 groupCount;
         for (uint256 i = 0; i < my.length; i++) {
             uint256 fid = my[i];
@@ -340,31 +410,63 @@ contract Storage {
             }
         }
 
-        // 2️⃣ Build the arrays
-        folderIds     = new uint256[](groupCount);
-        folderNames   = new string[](groupCount);
-        folderOwners  = new address[](groupCount);
+        // Build the arrays
+        folderIds = new uint256[](groupCount);
+        folderNames = new string[](groupCount);
+        folderOwners = new address[](groupCount);
         uint256 idx2;
         for (uint256 i = 0; i < my.length; i++) {
             uint256 fid = my[i];
             if (folders[fid].members.length > 1) {
-                folderIds[idx2]    = fid;
-                folderNames[idx2]  = folders[fid].folderName;
+                folderIds[idx2] = fid;
+                folderNames[idx2] = folders[fid].folderName;
                 folderOwners[idx2] = folders[fid].folderOwner;
                 idx2++;
             }
         }
     }
 
+    /// @notice List all folder IDs where caller is the owner
+    function getMyOwnedFolderIds()
+        external
+        view
+        returns (uint256[] memory owned)
+    {
+        uint256[] storage mine = userFolders[msg.sender];
+
+        // count how many owned folders there are
+        uint256 cnt;
+        for (uint256 i = 0; i < mine.length; i++) {
+            uint256 fid = mine[i];
+            if (folders[fid].folderOwner == msg.sender) {
+                cnt++;
+            }
+        }
+
+        // the array
+        owned = new uint256[](cnt);
+
+        //fill it
+        uint256 idx;
+        for (uint256 i = 0; i < mine.length; i++) {
+            uint256 fid = mine[i];
+            if (folders[fid].folderOwner == msg.sender) {
+                owned[idx++] = fid;
+            }
+        }
+    }
+
     /// @notice Return the name of a folder
-    function getFolderName(uint256 folderId) external view returns (string memory) {
+    function getFolderName(
+        uint256 folderId
+    ) external view returns (string memory) {
         return folders[folderId].folderName;
     }
 
     function leaveFolder(uint256 folderId) public {
         Folder storage f = folders[folderId];
-        if(!f.isMember[msg.sender]) revert NotAMember();
-        if(f.folderOwner == msg.sender) revert OwnerCannotLeave();
+        if (!f.isMember[msg.sender]) revert NotAMember();
+        if (f.folderOwner == msg.sender) revert OwnerCannotLeave();
 
         _removeFolderMember(folderId, msg.sender);
         _removeUserFolder(msg.sender, folderId);
@@ -377,9 +479,9 @@ contract Storage {
     }
 
     function _removeUserFolder(address user, uint256 folderId) internal {
-        uint256 idx     = userFolderIndex[user][folderId];
+        uint256 idx = userFolderIndex[user][folderId];
         uint256 lastIdx = userFolders[user].length - 1;
-        uint256 lastId  = userFolders[user][lastIdx];
+        uint256 lastId = userFolders[user][lastIdx];
 
         // Swap
         userFolders[user][idx] = lastId;
@@ -394,9 +496,9 @@ contract Storage {
 
     function _removeFolderMember(uint256 folderId, address member) internal {
         Folder storage f = folders[folderId];
-        uint256 idx       = folderMemberIndex[folderId][member];
-        uint256 lastIdx   = f.members.length - 1;
-        address lastMem   = f.members[lastIdx];
+        uint256 idx = folderMemberIndex[folderId][member];
+        uint256 lastIdx = f.members.length - 1;
+        address lastMem = f.members[lastIdx];
 
         // Swap
         f.members[idx] = lastMem;
@@ -411,7 +513,7 @@ contract Storage {
 
     function deleteFolder(uint256 folderId) public {
         Folder storage f = folders[folderId];
-        if(msg.sender != f.folderOwner) revert OnlyFolderOwner();
+        if (msg.sender != f.folderOwner) revert OnlyFolderOwner();
 
         // Remove all files
         uint256[] storage fileIds = folderFiles[folderId];
@@ -423,7 +525,7 @@ contract Storage {
         address[] memory membersSnapshot = f.members;
 
         for (uint i = 0; i < membersSnapshot.length; i++) {
-            address m =  membersSnapshot[i];
+            address m = membersSnapshot[i];
             // O(1) remove from userFolders
             _removeUserFolder(m, folderId);
 
@@ -436,12 +538,14 @@ contract Storage {
             f.isMember[m] = false;
         }
 
-        
         delete folders[folderId];
     }
 
     /// @notice Upload a personal file (no folder required)
-    function uploadPersonalFile(string calldata fileName, string calldata cid) external returns (uint256) {
+    function uploadPersonalFile(
+        string calldata fileName,
+        string calldata cid
+    ) external returns (uint256) {
         uint256 fid = personalFileCount[msg.sender]++;
         personalFiles[msg.sender][fid] = File(msg.sender, fileName, cid, true);
         personalFileIds[msg.sender].push(fid);
@@ -451,7 +555,7 @@ contract Storage {
     /// @notice Delete a personal file
     function deletePersonalFile(uint256 fileId) external {
         File storage fe = personalFiles[msg.sender][fileId];
-        if(!fe.available) revert FileNotAvailable();
+        if (!fe.available) revert FileNotAvailable();
         delete personalFiles[msg.sender][fileId];
         uint256[] storage arr = personalFileIds[msg.sender];
         for (uint i = 0; i < arr.length; i++) {
@@ -461,30 +565,29 @@ contract Storage {
                 break;
             }
         }
-
     }
 
-        /// @notice List personal file IDs for caller
+    /// @notice List personal file IDs for caller
     function getPersonalFileIds() external view returns (uint256[] memory) {
         return personalFileIds[msg.sender];
     }
 
     /// @notice Fetch a personal file entry
-    function getPersonalFile(uint256 fileId) external view returns (string memory fileName, string memory cid) {
+    function getPersonalFile(
+        uint256 fileId
+    ) external view returns (string memory fileName, string memory cid) {
         File storage fe = personalFiles[msg.sender][fileId];
-        if(!fe.available) revert FileNotAvailable();
+        if (!fe.available) revert FileNotAvailable();
         return (fe.fileName, fe.cid);
     }
 
-    function registerEncryptionKey(string calldata pubKey)external{
+    function registerEncryptionKey(string calldata pubKey) external {
         encryptionKeys[msg.sender] = pubKey;
     }
 
-    function getEncryptionKeys(address[] calldata users)
-        external
-        view
-        returns (string[] memory keys)
-    {
+    function getEncryptionKeys(
+        address[] calldata users
+    ) external view returns (string[] memory keys) {
         uint256 len = users.length;
         keys = new string[](len);
 
@@ -520,5 +623,4 @@ contract Storage {
         // Delete key
         delete encryptionKeys[user];
     }
-
 }

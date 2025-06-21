@@ -4,8 +4,7 @@ import type { IPFSHTTPClient } from "ipfs-http-client";
 import { FILEVAULT_ABI } from "../contracts/abi";
 import { CONTRACT_ADDRESS } from "../contracts/address";
 import { deriveKey, encrypt, decrypt, unwrapKeyFor } from "../crypto";
-import { getGatewayUrl } from "./ipfsClients";
-
+import { uploadAndPin, getGatewayUrl, unpinFromCluster } from "./ipfsClients";
 
 /**
  * Upload a personal file:
@@ -28,18 +27,19 @@ export async function uploadPersonalFile(
   // prepend salt
   const packaged = new Uint8Array(salt.byteLength + encrypted.byteLength);
   packaged.set(salt, 0);
-  packaged.set(encrypted, salt.byteLength);
+  // packaged.set(encrypted, salt.byteLength);
+  packaged.set(new Uint8Array(encrypted), salt.byteLength);
 
   // upload to IPFS
-  const { cid } = await ipfsClient.add(packaged);
+  const cid = await uploadAndPin(new File([packaged], fileName));
 
   // record on-chain
   const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
   await ctr.methods
-    .uploadPersonalFile(fileName, cid.toString())
+    .uploadPersonalFile(fileName, cid)
     .send({ from: userAddress });
 
-  return { cid: cid.toString() };
+  return { cid };
 }
 
 /**
@@ -48,11 +48,13 @@ export async function uploadPersonalFile(
  * 2. Split salt + encrypted payload
  * 3. Re-derive key and AES-GCM decrypt
  */
-export async function downloadPersonalFile( cid: string, passphrase: string): Promise<Uint8Array> {
-
+export async function downloadPersonalFile(
+  cid: string,
+  passphrase: string
+): Promise<Uint8Array> {
   // fetch encrypted file from IPFS
-  const res = await fetch(getGatewayUrl(cid))
-  const data = new Uint8Array(await res.arrayBuffer())
+  const res = await fetch(getGatewayUrl(cid));
+  const data = new Uint8Array(await res.arrayBuffer());
 
   // split salt (16) + ciphertext (iv||ct)
   const salt = data.slice(0, 16);
@@ -70,27 +72,36 @@ export async function downloadPersonalFile( cid: string, passphrase: string): Pr
  * 2. AES-GCM encrypt payload
  * 3. IPFS add, then call uploadFile(folderId, fileName, cid)
  */
-export async function uploadFolderFile(web3: Web3, ipfsClient: IPFSHTTPClient, userAddress: string, folderId: number, payload: Uint8Array, fileName: string): Promise<{ cid: string }> {
+export async function uploadFolderFile(
+  web3: Web3,
+  ipfsClient: IPFSHTTPClient,
+  userAddress: string,
+  folderId: number,
+  payload: Uint8Array,
+  fileName: string
+): Promise<{ cid: string }> {
   const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
 
   // 1) fetch & decrypt folder key
   const wrappedHex: string = await ctr.methods
     .getEncryptedFolderKey(folderId)
     .call({ from: userAddress });
-  const aesKey = await unwrapKeyFor(wrappedHex, userAddress)
+  const aesKey = await unwrapKeyFor(wrappedHex, userAddress);
 
   // 2) encrypt payload
   const encrypted = await encrypt(payload.buffer, aesKey);
 
   // 3) upload to IPFS
-  const { cid } = await ipfsClient.add(encrypted);
+  const cid = await uploadAndPin(
+    new File([new Uint8Array(encrypted)], fileName)
+  );
 
   // 4) record on-chain
   await ctr.methods
     .uploadFile(folderId, fileName, cid.toString())
     .send({ from: userAddress });
 
-  return {cid: cid.toString()};
+  return { cid: cid.toString() };
 }
 
 /**
@@ -116,18 +127,20 @@ export async function downloadFolderFile(
 
   // fetch encrypted payload
   // fetch encrypted file from IPFS
-  const res = await fetch(getGatewayUrl(cid))
-  const encrypted = new Uint8Array(await res.arrayBuffer())
+  const res = await fetch(getGatewayUrl(cid));
+  const encrypted = new Uint8Array(await res.arrayBuffer());
 
   // decrypt (assumes iv is first 12 bytes)
   const iv = encrypted.slice(0, 12);
   const ct = encrypted.slice(12);
 
-
-  const buf = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    aesKey,
-    ct
-  );
+  const buf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, ct);
   return new Uint8Array(buf);
+}
+
+/**
+ * Unpin a file from the IPFS Cluster
+ */
+export async function unpinFile(cid: string): Promise<void> {
+  await unpinFromCluster(cid);
 }

@@ -1,91 +1,85 @@
 // src/pages/PersonalFolders.tsx
-import { FormEvent, useEffect, useState } from 'react'
-import { FILEVAULT_ABI } from '../contracts/abi'
-import { CONTRACT_ADDRESS } from '../contracts/address'
-import { useWeb3 } from '../context/Web3Context'
-import { wrapKeyFor } from '../crypto'
-import { useNavigate } from 'react-router-dom'
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
-import { Plus } from "lucide-react"
+import { FormEvent, useEffect, useState } from "react";
+import { FILEVAULT_ABI } from "../contracts/abi";
+import { CONTRACT_ADDRESS } from "../contracts/address";
+import { useWeb3 } from "../context/Web3Context";
+import { wrapKeyFor } from "../crypto";
+import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Plus } from "lucide-react";
 
-
-declare let window: any
-
+declare let window: any;
 
 interface FolderMeta {
-    folderName: string
-    folderId: number
-    }
-
+  folderName: string;
+  folderId: number;
+}
 
 export default function PersonalFolders() {
-  const { web3, userAddress } = useWeb3()
-  const [folders, setFolders] = useState<FolderMeta[]>([])
+  const { web3, userAddress } = useWeb3();
+  const [folders, setFolders] = useState<FolderMeta[]>([]);
   const [newName, setNewName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (web3 && userAddress) loadPersonalFolders()
-  }, [web3, userAddress])
+    if (web3 && userAddress) loadPersonalFolders();
+  }, [web3, userAddress]);
 
   async function loadPersonalFolders() {
-    const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+    const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
     const raw: any = await contract.methods
       .getPersonalFolders()
-      .call({ from: userAddress })
+      .call({ from: userAddress });
 
     // raw may have both numeric and named keys
-    const idsRaw = raw.folderIds ?? raw[0]
-    const namesRaw = raw.folderNames ?? raw[1]
+    const idsRaw = raw.folderIds ?? raw[0];
+    const namesRaw = raw.folderNames ?? raw[1];
     // normalize to string[]
     const ids: string[] = Array.isArray(idsRaw)
       ? idsRaw
-      : Object.values(idsRaw).map((v: any) => v.toString())
+      : Object.values(idsRaw).map((v: any) => v.toString());
     const names: string[] = Array.isArray(namesRaw)
       ? namesRaw
-      : Object.values(namesRaw).map((v: any) => v.toString())
+      : Object.values(namesRaw).map((v: any) => v.toString());
 
-    console.log('Personal folders:', ids, names)
+    console.log("Personal folders:", ids, names);
 
     const list = ids.map((id, idx) => ({
       folderId: Number(id),
-      folderName: names[idx]
-    }))
+      folderName: names[idx],
+    }));
 
-    list.sort((a, b) => a.folderId - b.folderId)
-    setFolders(list)
+    list.sort((a, b) => a.folderId - b.folderId);
+    setFolders(list);
   }
 
   async function onCreate(e: FormEvent) {
-    e.preventDefault()
-    if (!web3 || !userAddress || !newName) return
+    e.preventDefault();
+    if (!web3 || !userAddress || !newName) return;
 
-
-    const keyBytes = window.crypto.getRandomValues(new Uint8Array(32))
+    const keyBytes = window.crypto.getRandomValues(new Uint8Array(32));
 
     // wrap for yourself
     const pubKey: string = await window.ethereum.request({
-      method: 'eth_getEncryptionPublicKey',
-      params: [userAddress]
-    })
-    
-    const wrappedHex =await wrapKeyFor(pubKey, keyBytes)
+      method: "eth_getEncryptionPublicKey",
+      params: [userAddress],
+    });
 
-      
-    const contract = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS)
+    const wrappedHex = await wrapKeyFor(pubKey, keyBytes);
+
+    const contract = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
     await contract.methods
       .createFolder(newName, [userAddress], [wrappedHex])
-      .send({ from: userAddress })
+      .send({ from: userAddress });
 
-    setNewName("")
-    setDialogOpen(false);  
-    await loadPersonalFolders()
+    setNewName("");
+    setDialogOpen(false);
+    await loadPersonalFolders();
   }
 
-return (
+  return (
     <div className="px-6 py-4 w-full max-w-7xl mx-auto">
-
       <div className="w-full flex items-center gap-3 mb-6">
         <h1 className="text-3xl font-bold text-white">Personal Folders</h1>
 
@@ -97,10 +91,7 @@ return (
           </DialogTrigger>
           <DialogContent className="bg-neutral-900 text-white max-w-md rounded">
             <h2 className="text-lg font-semibold mb-4">New Folder</h2>
-            <form
-              onSubmit={onCreate}
-              className="space-y-4"
-            >
+            <form onSubmit={onCreate} className="space-y-4">
               <input
                 type="text"
                 placeholder="Folder name"
@@ -139,11 +130,13 @@ return (
             <div className="h-3 w-1/2 rounded-t-md bg-gray-800 group-hover:bg-sky-800"></div>
 
             <div className="rounded-b-md bg-gray-700 group-hover:bg-sky-700 p-4 shadow-md">
-              <h3 className="text-xl text-white font-semibold mb-2">{folder.folderName}</h3>
+              <h3 className="text-xl text-white font-semibold mb-2">
+                {folder.folderName}
+              </h3>
             </div>
           </div>
         ))}
       </div>
     </div>
-)
+  );
 }

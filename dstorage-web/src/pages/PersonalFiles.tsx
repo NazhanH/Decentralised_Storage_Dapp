@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useRef } from "react";
-import {Trash2, Upload} from "lucide-react"
-import toast from "react-hot-toast"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { Trash2, Upload, FileSearch } from "lucide-react";
+import toast from "react-hot-toast";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { FILEVAULT_ABI } from "../contracts/abi";
 import { CONTRACT_ADDRESS } from "../contracts/address";
 import { useWeb3 } from "../context/Web3Context";
-import { uploadPersonalFile, downloadPersonalFile } from "../ipfs/ipfsServices";
-
+import {
+  uploadPersonalFile,
+  downloadPersonalFile,
+  unpinFile,
+} from "../ipfs/ipfsServices";
 
 declare let window: any;
 
@@ -21,8 +24,9 @@ export default function PersonalFiles() {
   const [uploadedFiles, setUploadedFiles] = useState<FileMeta[]>([]);
   const { web3, userAddress, ipfsClient } = useWeb3();
   const [passphrase, setPassphrase] = useState<string>("");
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // fetch files on load or change to web3 or userAddress
   useEffect(() => {
@@ -32,15 +36,15 @@ export default function PersonalFiles() {
   }, [web3, userAddress]);
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
-    e.preventDefault()
+    e.preventDefault();
     if (e.dataTransfer.files[0]) {
-      setSelectedFile(e.dataTransfer.files[0])
+      setSelectedFile(e.dataTransfer.files[0]);
     }
   }
-  
+
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files?.[0]) {
-      setSelectedFile(e.target.files[0])
+      setSelectedFile(e.target.files[0]);
     }
   }
 
@@ -76,7 +80,7 @@ export default function PersonalFiles() {
   const handleUpload = async () => {
     if (!web3 || !userAddress || !ipfsClient || !selectedFile) return;
 
-    const toastId = toast.loading("Uploading file...")
+    const toastId = toast.loading("Uploading file...");
 
     // ask for a passphrase if not already set
     let pass = passphrase;
@@ -97,28 +101,28 @@ export default function PersonalFiles() {
         pass
       );
       console.log("Uploaded:", cid);
-      toast.success("Upload complete!")
-      toast.dismiss(toastId)
+      toast.success("Upload complete!");
+      toast.dismiss(toastId);
       setSelectedFile(null);
-      setDialogOpen(false)
+      setDialogOpen(false);
       await fetchMyFiles();
     } catch (e: any) {
-      toast.error("Upload failed")
-      toast.dismiss(toastId)
+      toast.error("Upload failed");
+      toast.dismiss(toastId);
       console.error("Upload failed", e);
       alert("Upload failed: " + (e as Error).message);
       setSelectedFile(null);
     }
   };
 
-  // 3️⃣ Handle download
+  // Handle download
   const handleDownload = async (file: FileMeta) => {
     if (!ipfsClient) return;
     const pass = window.prompt(`Passphrase for "${file.fileName}":`) || "";
     if (!pass) return;
 
     try {
-      toast("Download started for CID: " + file.cid)
+      toast("Download started for CID: " + file.cid);
       const data = await downloadPersonalFile(file.cid, pass);
       // trigger browser download
       const blob = new Blob([data]);
@@ -134,7 +138,7 @@ export default function PersonalFiles() {
     }
   };
 
-  const handleDelete = async (fileId: string) => {
+  const handleDelete = async (fileId: string, cid: string) => {
     if (!web3 || !userAddress) {
       toast.error("Wallet not connected");
       return;
@@ -148,21 +152,27 @@ export default function PersonalFiles() {
         .deletePersonalFile(fileId)
         .send({ from: userAddress });
 
+      await unpinFile(cid);
       toast.success("File deleted");
       toast.dismiss(toastId);
 
       // remove it locally
-      setUploadedFiles((files) =>
-        files.filter((f) => f.fileId !== fileId)
-      );
+      setUploadedFiles((files) => files.filter((f) => f.fileId !== fileId));
     } catch (err: any) {
       console.error("Delete failed", err);
       toast.error("Delete failed: " + err.message);
     }
   };
 
+  // filter files by name or cid
+  const filteredFiles = uploadedFiles.filter(
+    (f) =>
+      f.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      f.cid.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-     <div className="px-6 py-4 w-full max-w-7xl mx-auto">
+    <div className="px-6 py-4 w-full max-w-7xl mx-auto">
       <div className="w-full flex items-center gap-4 mb-6">
         <h1 className="text-3xl font-bold text-white">Personal Files</h1>
 
@@ -202,30 +212,58 @@ export default function PersonalFiles() {
         </Dialog>
       </div>
 
+      <div className="relative w-full mb-4">
+        <FileSearch
+          size={16}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+        />
+        <input
+          type="text"
+          placeholder="Search by Name or CID"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-neutral-800 text-white placeholder-gray-400 pl-10 pr-3 py-2 rounded focus:outline-none"
+        />
+      </div>
+
       {/* File Table */}
       <div className="w-full overflow-x-auto rounded-lg">
         <table className="w-full text-left border-collapse text-white bg-black">
           <thead className=" text-white">
             <tr>
-              <th className="text-xl p-3 font-semibold border-b border-white text-left">Name</th>
-              <th className="text-xl p-3 font-semibold border-b border-white text-left">CID</th>
-              <th className="text-xl p-3 font-semibold border-b border-white text-right">Actions</th>
+              <th className="text-xl p-3 font-semibold border-b border-white text-left">
+                Name
+              </th>
+              <th className="text-xl p-3 font-semibold border-b border-white text-left">
+                CID
+              </th>
+              <th className="text-xl p-3 font-semibold border-b border-white text-right">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
-            {uploadedFiles.map((file) => (
-              <tr key={file.cid} className="border-b border-white hover:bg-gray-800">
-                <td className="p-3 align-middle cursor-pointer hover:underline"
-                  onDoubleClick={() => handleDownload(file)}>
-                    <div className="flex items-center h-full">
-                      <span className="text-xl text-white">{file.fileName}</span>
-                    </div>
+            {filteredFiles.map((file) => (
+              <tr
+                key={file.cid}
+                className="border-b border-white hover:bg-gray-800"
+              >
+                <td
+                  className="p-3 align-middle cursor-pointer hover:underline"
+                  onDoubleClick={() => handleDownload(file)}
+                >
+                  <div className="flex items-center h-full">
+                    <span className="text-xl text-white">{file.fileName}</span>
+                  </div>
                 </td>
                 <td className="text-xl p-3 align-middle break-all text-sm text-gray-400">
                   {file.cid}
                 </td>
                 <td className="text-xl p-3 text-right space-x-2 align-middle">
-                  <button onClick={() => handleDelete(file.fileId)} className="text-red-500 hover:text-red-700">
+                  <button
+                    onClick={() => handleDelete(file.fileId, file.cid)}
+                    className="text-red-500 hover:text-red-700"
+                  >
                     <Trash2 className="w-5 h-5 text-red-500 hover:scale-110 transition" />
                   </button>
                 </td>
@@ -235,5 +273,5 @@ export default function PersonalFiles() {
         </table>
       </div>
     </div>
-  )
+  );
 }

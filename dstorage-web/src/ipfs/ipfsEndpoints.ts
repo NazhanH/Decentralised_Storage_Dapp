@@ -1,18 +1,13 @@
-export interface Endpoint{
-    name: string
-    apiUrl: string
-    gatewayUrl: string
+export interface Endpoint {
+  name: string;
+  apiUrl: string;
+  gatewayUrl: string;
 }
 
 export const IPFS_ENDPOINTS: Endpoint[] = [
-    {
-        name: 'Localhost IPFS',
-        apiUrl: 'https://127.0.0.1:5001/api/v0',
-        gatewayUrl: 'https://127.0.0.1/ipfs/',
-    },
-    {
-        name: 'Node 1',
-        apiUrl: 'http://192.168.0.135:5001/api/v0',
-        gatewayUrl: 'http://192.168.0.135:8080/ipfs/',
-    },
-]
+  {
+    name: "DO_Node",
+    apiUrl: "http://188.166.215.198:9094",
+    gatewayUrl: "http://188.166.215.198:8080/ipfs/",
+  },
+];
