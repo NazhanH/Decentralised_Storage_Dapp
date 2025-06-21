@@ -122,7 +122,7 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
         .encryptionKeys(userAddress)
         .call({ from: userAddress });
       const registered = existingKey.length > 0;
-      setIsRegistered(registered); // 👈 update context state here
+      setIsRegistered(registered);
       return registered;
     } catch (err) {
       console.error("Error checking encryption key registration:", err);
