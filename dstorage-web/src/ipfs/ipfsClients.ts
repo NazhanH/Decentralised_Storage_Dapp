@@ -52,7 +52,7 @@ export async function uploadAndPin(file: File): Promise<string> {
   const data = await res.json();
   const cid = data.cid["/"] || data.cid;
 
-  console.log(`✅ File uploaded and pinned: ${cid}`);
+  console.log(`File uploaded and pinned: ${cid}`);
   return cid;
 }
 

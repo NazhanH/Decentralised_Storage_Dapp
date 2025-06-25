@@ -10,7 +10,7 @@ import {
   unpinFile,
 } from "../ipfs/ipfsServices";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { Trash2, Upload, Users, DoorOpen, FolderSearch} from "lucide-react";
+import { Trash2, Upload, Users, DoorOpen, FolderSearch } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface FileMeta {
@@ -20,9 +20,8 @@ interface FileMeta {
   uploader: string;
 }
 
-// bit-flags must match your Solidity constants:
-const PERM_UPLOAD = 1 << 1; // 0b010  => 2
-const PERM_DELETE = 1 << 2; // 0b100  => 4
+const PERM_UPLOAD = 1 << 1;
+const PERM_DELETE = 1 << 2;
 
 export default function GroupFiles() {
   const { id } = useParams<{ id: string }>();
@@ -80,7 +79,6 @@ export default function GroupFiles() {
 
     (async () => {
       try {
-        // Web3’s .call() *does* return a promise at runtime, but TS doesn’t know it.
         const p: string = await ctr.methods
           .myPermissions(folderId)
           .call({ from: userAddress });
@@ -116,7 +114,7 @@ export default function GroupFiles() {
       })
     );
     setFiles(metas);
-  };
+  }
 
   async function loadOwner() {
     const ctr = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
@@ -128,7 +126,7 @@ export default function GroupFiles() {
     } catch (e) {
       console.error("couldn't fetch owner", e);
     }
-  };
+  }
 
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
@@ -180,13 +178,13 @@ export default function GroupFiles() {
     if (e.dataTransfer.files[0]) {
       setSelectedFile(e.dataTransfer.files[0]);
     }
-  };
+  }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files?.[0]) {
       setSelectedFile(e.target.files[0]);
     }
-  };
+  }
 
   const deleteFile = async (folderId: number, fileId: number, cid: string) => {
     if (!web3 || !userAddress) {
@@ -225,33 +223,34 @@ export default function GroupFiles() {
     const t = toast.loading("Deleting folder…");
     const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
     try {
-      await ctr.methods.deleteFolder(folderId).send({ from: userAddress });
-
+      // 1) fetch file IDs
       const raw: any = await ctr.methods
         .getFolderFiles(folderId)
         .call({ from: userAddress });
-
       const fileIds: string[] = Array.isArray(raw)
         ? raw
         : Object.keys(raw)
-            .filter((k) => k !== "length") // drop the length property
+            .filter((k) => k !== "length")
             .map((k) => raw[k]);
 
-      for (const id of fileIds) {
-        // call returns an object {0: uploader, 1: fileName, 2: cid, uploader: string, fileName: string, cid: string, length:3}
-        const fileObj: { uploader: string; fileName: string; cid: string } =
-          await ctr.methods
-            .getFolderFile(folderId, id)
-            .call({ from: userAddress });
+      // 2) fetch CIDs (or entire file objects)
+      const files = await Promise.all(
+        fileIds.map((id) =>
+          ctr.methods.getFolderFile(folderId, id).call({ from: userAddress })
+        )
+      );
+      const cids = files.map((f: any) => f.cid);
 
-        const cid = fileObj.cid; // <-- grab it by name
-        await unpinFile(cid);
-        console.log(`Unpinned file with CID: ${cid}`);
-      }
+      // 3) now delete on-chain
+      await ctr.methods.deleteFolder(folderId).send({ from: userAddress });
 
-      toast.success("Folder deleted");
+      // 4) unpin off-chain
+      await Promise.all(
+        cids.map((cid: string) => unpinFile(cid).catch(() => null))
+      );
+
       toast.dismiss(t);
-      // redirect back to personal folders
+      toast.success("Folder deleted");
       navigate("/in/groups");
     } catch (err: any) {
       console.error("Folder deletion failed", err);
@@ -261,10 +260,11 @@ export default function GroupFiles() {
   };
 
   // filter files by name or cid
-  const filteredFiles = files.filter(f =>
-    f.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    f.cid.toLowerCase().includes(searchQuery.toLowerCase())||
-    f.uploader.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredFiles = files.filter(
+    (f) =>
+      f.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      f.cid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      f.uploader.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleLeaveGroup = async () => {
@@ -293,7 +293,7 @@ export default function GroupFiles() {
   if (isMember === null) {
     // still checking
     return <div>Checking access…</div>;
-  };
+  }
 
   if (!id) return <p>Invalid group folder</p>;
   return (
@@ -366,14 +366,14 @@ export default function GroupFiles() {
 
       <div className="relative w-full mb-4">
         <FolderSearch
-           size={16}
-           className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          size={16}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
         />
         <input
           type="text"
           placeholder="Search by Name, CID, or Uploader"
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-neutral-800 text-white placeholder-gray-400 pl-10 pr-3 py-2 rounded focus:outline-none"
         />
       </div>

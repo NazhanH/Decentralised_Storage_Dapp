@@ -43,7 +43,7 @@ export default function GroupMembers() {
 
       const contract = new web3!.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
 
-      // 1) Fetch folder owner from on-chain (assumes your contract has a getter)
+      // 1) Fetch folder owner from on-chain
       const owner: string = await contract.methods
         .getFolderOwner(folderId) // direct public struct accessor
         .call({ from: userAddress });
@@ -56,7 +56,6 @@ export default function GroupMembers() {
       // 3) For each member, fetch their permission bitmask
       const infos: MemberInfo[] = await Promise.all(
         rawMembers.map(async (addr) => {
-          // getMemberPermissions requires caller to be owner or a manager
           const perms: string = await contract.methods
             .getMemberPermissions(folderId, addr)
             .call({ from: userAddress });
@@ -173,7 +172,7 @@ export default function GroupMembers() {
       });
       // ‣ b64Key is exactly the raw AES key, base64‐encoded
 
-      // 3) Convert base64 to Uint8Array ‣ these are your raw AES bytes
+      // 3) Convert base64 to Uint8Array ‣ these are raw AES bytes
       const rawBytes = Uint8Array.from(atob(b64Key), (c) => c.charCodeAt(0));
 
       // 4) Fetch the new member’s registered public key on‐chain

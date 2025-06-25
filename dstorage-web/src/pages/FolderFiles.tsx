@@ -78,7 +78,7 @@ export default function FolderFiles() {
       .call({ from: userAddress });
     setFolderName(name);
 
-    // 1️⃣ get the list of file IDs
+    //get the list of file IDs
     const rawIds: any = await ctr.methods
       .getFolderFiles(folderId)
       .call({ from: userAddress });
@@ -86,12 +86,12 @@ export default function FolderFiles() {
       Array.isArray(rawIds) ? rawIds : Object.values(rawIds)
     ).map((v: any) => Number(v));
 
-    // 2️⃣ for *each* ID, call getFolderFile to fetch metadata
+    //for *each* ID, call getFolderFile to fetch metadata
     const metas = await Promise.all(
       ids.map(async (fid) => {
         const fileData: { uploader: string; fileName: string; cid: string } =
           await ctr.methods
-            .getFolderFile(folderId, fid) // ← use your new getter
+            .getFolderFile(folderId, fid)
             .call({ from: userAddress });
 
         const { uploader, fileName, cid } = fileData;
@@ -204,33 +204,34 @@ export default function FolderFiles() {
     const t = toast.loading("Deleting folder…");
     const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
     try {
-      await ctr.methods.deleteFolder(folderId).send({ from: userAddress });
-
+      // 1) fetch file IDs
       const raw: any = await ctr.methods
         .getFolderFiles(folderId)
         .call({ from: userAddress });
-
       const fileIds: string[] = Array.isArray(raw)
         ? raw
         : Object.keys(raw)
-            .filter((k) => k !== "length") // drop the length property
+            .filter((k) => k !== "length")
             .map((k) => raw[k]);
 
-      for (const id of fileIds) {
-        // call returns an object {0: uploader, 1: fileName, 2: cid, uploader: string, fileName: string, cid: string, length:3}
-        const fileObj: { uploader: string; fileName: string; cid: string } =
-          await ctr.methods
-            .getFolderFile(folderId, id)
-            .call({ from: userAddress });
+      // 2) fetch CIDs (or entire file objects)
+      const files = await Promise.all(
+        fileIds.map((id) =>
+          ctr.methods.getFolderFile(folderId, id).call({ from: userAddress })
+        )
+      );
+      const cids = files.map((f: any) => f.cid);
 
-        const cid = fileObj.cid; // <-- grab it by name
-        await unpinFile(cid);
-        console.log(`Unpinned file with CID: ${cid}`);
-      }
+      // 3) now delete on-chain
+      await ctr.methods.deleteFolder(folderId).send({ from: userAddress });
 
-      toast.success("Folder deleted");
+      // 4) unpin off-chain
+      await Promise.all(
+        cids.map((cid: string) => unpinFile(cid).catch(() => null))
+      );
+      
       toast.dismiss(t);
-      // redirect back to personal folders
+      toast.success("Folder deleted");
       navigate("/in/folders");
     } catch (err: any) {
       console.error("Folder deletion failed", err);
