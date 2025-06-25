@@ -6,13 +6,13 @@ installed the metamask extension on your browser of choice.
   
 ## Setting up
 1. clone or download this repository into a directory
-2. open your terminal and navigate into /contracts by 'cd .\contracts'
-3. run 'npm install' in the terminal to download the required packages
-4. run 'npx hardhat node' in the terminal. **do not close this terminal**
-5. open a new terminal on the current directory and run 'npx hardhat run scripts/deploy.ts --network localhost'
+2. open your terminal and navigate into /contracts by `cd .\contracts`
+3. run `npm install` in the terminal to download the required packages
+4. run `npx hardhat node` in the terminal. **do not close this terminal**
+5. open a new terminal on the current directory and run `npx hardhat run scripts/deploy.ts --network localhost`
 6. navigate to /dstorage-web
-7. run 'npm install' in the terminal to download the required packages
-8. run 'npm run dev' in the terminal to start the webserver
+7. run `npm install` in the terminal to download the required packages
+8. run `npm run dev` in the terminal to start the webserver. **do not close this terminal**
 9. the web app should run at [http://localhost:5173/](http://localhost:5173/)
 10. you need to have finished setting up metamask and import test accounts to use the web app
 
@@ -29,7 +29,7 @@ installed the metamask extension on your browser of choice.
 10. Use the newly added local testnet by selecting it in the network list.
 
 ### import test accounts
-1. when you ran 'npx hardhat node' a list of accounts and their private keys should pop up.  
+1. when you ran `npx hardhat node` a list of accounts and their private keys should pop up.  
 2. open metamask
 3. ensure that you are currently using the local test net 
 4. on the top centre of the metamask extension window there should be an option to select accounts. select it.
