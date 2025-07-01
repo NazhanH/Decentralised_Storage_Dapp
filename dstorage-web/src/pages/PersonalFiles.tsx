@@ -82,13 +82,16 @@ export default function PersonalFiles() {
 
     const toastId = toast.loading("Uploading file...");
 
-    // ask for a passphrase if not already set
+    // ask for a passphrase
     let pass = passphrase;
+    pass = window.prompt("Enter encryption passphrase:") || "";
+    setPassphrase(pass);
+
     if (!pass) {
-      pass = window.prompt("Enter encryption passphrase:") || "";
-      setPassphrase(pass);
+      toast.dismiss(toastId);
+      toast.error("Encryption passphrase required");
+      return;
     }
-    if (!pass) return alert("Encryption passphrase required");
 
     try {
       const buffer = new Uint8Array(await selectedFile.arrayBuffer());
@@ -105,6 +108,7 @@ export default function PersonalFiles() {
       toast.dismiss(toastId);
       setSelectedFile(null);
       setDialogOpen(false);
+      setPassphrase("");
       await fetchMyFiles();
     } catch (e: any) {
       toast.error("Upload failed");

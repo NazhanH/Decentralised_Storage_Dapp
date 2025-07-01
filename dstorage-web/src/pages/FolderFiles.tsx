@@ -33,6 +33,7 @@ export default function FolderFiles() {
   const navigate = useNavigate();
   const [isMember, setIsMember] = useState<boolean | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  
 
   useEffect(() => {
     if (!web3 || !userAddress) return;
@@ -108,7 +109,10 @@ export default function FolderFiles() {
     if (!web3 || !userAddress || !ipfsClient || !selectedFile) return;
 
     try {
+
       const buffer = new Uint8Array(await selectedFile.arrayBuffer());
+      const start = performance.now();
+      const toastId = toast.loading("Uploading file... please wait -_-");
       const { cid } = await uploadFolderFile(
         web3,
         ipfsClient,
@@ -117,11 +121,17 @@ export default function FolderFiles() {
         buffer,
         selectedFile.name
       );
+      const end = performance.now();
+      toast.dismiss(toastId);
+      console.log(`Upload completed in ${((end - start)/1000).toFixed(3)} s`);
       console.log("Uploaded to IPFS CID:", cid);
       setSelectedFile(null);
       setDialogOpen(false);
       await loadFolder();
+      toast.success("File uploaded successfully!");
     } catch (err: any) {
+      toast.dismiss();
+      toast.error("Upload failed: " + err.message);
       console.error("Upload failed", err);
       alert("Upload failed: " + err.message);
     }
@@ -132,6 +142,8 @@ export default function FolderFiles() {
     if (!web3 || !userAddress || !ipfsClient) return;
 
     try {
+      const start = performance.now();
+      const toastId = toast.loading("Downloading file... please wait -_-");
       const data = await downloadFolderFile(
         web3,
         userAddress,
@@ -146,7 +158,13 @@ export default function FolderFiles() {
       a.download = file.fileName;
       a.click();
       URL.revokeObjectURL(url);
+      const end = performance.now();
+      toast.dismiss(toastId);
+      console.log(`Upload completed in ${((end - start)/1000).toFixed(3)} s`);
+      toast.success("File uploaded successfully!");
     } catch (err: any) {
+      toast.dismiss();
+      toast.error("Download failed: " + err.message);
       console.error("Download failed", err);
       alert("Download failed: " + err.message);
     }

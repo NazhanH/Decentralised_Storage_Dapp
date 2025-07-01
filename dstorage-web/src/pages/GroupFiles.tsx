@@ -132,6 +132,7 @@ export default function GroupFiles() {
     e.preventDefault();
     if (!web3 || !userAddress || !ipfsClient || !selectedFile) return;
     try {
+      const toastId = toast.loading("Uploading file...");
       const buffer = new Uint8Array(await selectedFile.arrayBuffer());
       const { cid } = await uploadFolderFile(
         web3,
@@ -142,6 +143,8 @@ export default function GroupFiles() {
         selectedFile.name
       );
       console.log("Uploaded to IPFS CID:", cid);
+      toast.dismiss(toastId);
+      toast.success("File uploaded successfully");
       setSelectedFile(null);
       loadGroupFiles();
       setDialogOpen(false);
@@ -154,6 +157,7 @@ export default function GroupFiles() {
   const handleDownload = async (file: FileMeta) => {
     if (!web3 || !userAddress || !ipfsClient) return;
     try {
+      const toastId = toast.loading("Downloading file...");
       const data = await downloadFolderFile(
         web3,
         userAddress,
@@ -166,6 +170,7 @@ export default function GroupFiles() {
       a.href = url;
       a.download = file.fileName;
       a.click();
+      toast.dismiss(toastId);
       URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error("Download failed", err);
@@ -273,7 +278,7 @@ export default function GroupFiles() {
       return;
     }
 
-    const t = toast.loading("Deleting folder…");
+    const t = toast.loading("Leaving Group…");
     const ctr = new web3.eth.Contract(FILEVAULT_ABI, CONTRACT_ADDRESS);
 
     try {

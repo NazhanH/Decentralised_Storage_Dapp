@@ -33,7 +33,7 @@ export default function GroupMembers() {
   useEffect(() => {
     if (!web3 || !userAddress || isNaN(folderId)) return;
     loadMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [web3, userAddress, folderId]);
 
   async function loadMembers() {
@@ -45,7 +45,7 @@ export default function GroupMembers() {
 
       // 1) Fetch folder owner from on-chain
       const owner: string = await contract.methods
-        .getFolderOwner(folderId) // direct public struct accessor
+        .getFolderOwner(folderId) 
         .call({ from: userAddress });
 
       // 2) Fetch list of all member addresses
